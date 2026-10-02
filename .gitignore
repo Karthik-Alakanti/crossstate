@@ -9,6 +9,6 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
-# Build artifacts
+# Build/object files
 *.o
 *.so
