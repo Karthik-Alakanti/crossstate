@@ -1,0 +1,14 @@
+# SSH/private keys
+sshkey
+sshkey.pub
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Build artifacts
+*.o
+*.so
