@@ -1,0 +1,16 @@
+{
+  "milestone": "G2",
+  "test": "randomized XDP/reference-model differential test",
+  "packets_sent": 100000,
+  "packets_observed": 100000,
+  "missing_packet_ids": 0,
+  "duplicate_packet_ids": 0,
+  "decision_flag_mismatches": 0,
+  "touched_slots_checked": 64,
+  "final_state_mismatches": 0,
+  "elapsed_seconds": 72.88,
+  "seed": 20261015,
+  "flows": 64,
+  "result": "PASS",
+  "mode": "decision-observation validation; production enforcement not yet verified"
+}

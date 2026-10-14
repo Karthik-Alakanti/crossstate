@@ -1,0 +1,30 @@
+name: tcp_firewall
+version: 1
+
+slots: 65536
+buckets: 64
+
+hash: crc32_13B_be
+clock: shim_us
+
+idle_timeout_us: 30000000
+
+collision: reject
+expiry: lazy
+
+key:
+  - ip_a
+  - port_a
+  - ip_b
+  - port_b
+  - proto
+
+value:
+  st:
+    enum:
+      - NEW
+      - EST
+      - CLOSED
+  last: u48
+  pkts: u64
+  bytes: u64
