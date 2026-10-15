@@ -21,12 +21,14 @@
  * Constants
  * ========================= */
 
-const bit<48> T_US = 48w30000000;
+#include "firewall_constants.p4"
+
+const bit<48> T_US = CS_IDLE_TIMEOUT_US;
 
 /* State encoding */
-const bit<8> NEW    = 8w1;
-const bit<8> EST    = 8w2;
-const bit<8> CLOSED = 8w3;
+const bit<8> NEW    = CS_ST_NEW;
+const bit<8> EST    = CS_ST_EST;
+const bit<8> CLOSED = CS_ST_CLOSED;
 
 /* EtherTypes */
 const bit<16> ETHERTYPE_SHIM = 16w0x88B5;
@@ -133,27 +135,27 @@ struct metadata_t {
  * N = 2^16 slots.
  */
 
-register<bit<1>>(65536)  r_valid;
+register<bit<1>>(CS_SLOT_COUNT)  r_valid;
 
-register<bit<32>>(65536) r_ipa;
-register<bit<32>>(65536) r_ipb;
+register<bit<32>>(CS_SLOT_COUNT) r_ipa;
+register<bit<32>>(CS_SLOT_COUNT) r_ipb;
 
-register<bit<16>>(65536) r_pa;
-register<bit<16>>(65536) r_pb;
+register<bit<16>>(CS_SLOT_COUNT) r_pa;
+register<bit<16>>(CS_SLOT_COUNT) r_pb;
 
-register<bit<8>>(65536)  r_st;
+register<bit<8>>(CS_SLOT_COUNT)  r_st;
 
-register<bit<48>>(65536) r_last;
+register<bit<48>>(CS_SLOT_COUNT) r_last;
 
-register<bit<64>>(65536) r_pkts;
-register<bit<64>>(65536) r_bytes;
+register<bit<64>>(CS_SLOT_COUNT) r_pkts;
+register<bit<64>>(CS_SLOT_COUNT) r_bytes;
 
 /*
  * Migration-related registers.
  * Not exercised during initial G1 testing.
  */
-register<bit<1>>(65536)  r_synced;
-register<bit<32>>(65536) r_log;
+register<bit<1>>(CS_SLOT_COUNT)  r_synced;
+register<bit<32>>(CS_SLOT_COUNT) r_log;
 register<bit<64>>(1)     r_seq;
 
 
@@ -300,7 +302,7 @@ control MyIngress(
                     meta.pb,
                     hdr.ip.proto
                 },
-                32w65536
+                CS_SLOT_COUNT_B32
             );
 
 

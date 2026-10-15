@@ -11,17 +11,19 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
+#include "firewall_constants.h"
+
 #define CS_ETHERTYPE       0x88B5
 #define INNER_IPV4         0x0800
 #define CS_IPPROTO_TCP      6
 
-#define MAX_SLOTS          65536U
-#define KEY_LEN            13
-#define IDLE_TIMEOUT_US    30000000ULL
+#define MAX_SLOTS          CS_SLOT_COUNT
+#define KEY_LEN          CS_KEY_LEN
+#define IDLE_TIMEOUT_US          CS_IDLE_TIMEOUT_US
 
-#define ST_NEW             1
-#define ST_EST             2
-#define ST_CLOSED          3
+#define ST_NEW          CS_ST_NEW
+#define ST_EST          CS_ST_EST
+#define ST_CLOSED          CS_ST_CLOSED
 
 #define FLAG_INSIDE        0x01
 #define FLAG_SHADOW        0x02
