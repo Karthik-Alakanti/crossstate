@@ -1,0 +1,99 @@
+{
+  "format": "crossstate-runtime-contract",
+  "format_version": 1,
+  "runtime_contract": {
+    "counters": {
+      "fields": [
+        "pkts",
+        "bytes"
+      ],
+      "overflow": "wrap modulo 2^64",
+      "width_bits": 64
+    },
+    "flow_key": {
+      "canonicalization": "Sort endpoints by (IPv4 address << 16) | port",
+      "field_encoding": "network byte order",
+      "serialized_length_bytes": 13
+    },
+    "hash": {
+      "algorithm": "CRC-32",
+      "input_bytes": 13,
+      "slot_expression": "crc32(key_bytes) % slots"
+    },
+    "semantics_source": "ref/model.py",
+    "state_codes": {
+      "CLOSED": 3,
+      "EST": 2,
+      "NEW": 1
+    },
+    "timeout": {
+      "expired_flow_behavior": "Allow and replace on inside SYN without ACK; otherwise drop",
+      "expiry_policy": "lazy",
+      "live_when_elapsed_le_timeout": true,
+      "unit": "us"
+    }
+  },
+  "source_spec": "spec/firewall.yaml",
+  "spec": {
+    "key_fields": [
+      {
+        "bits": 32,
+        "bytes": 4,
+        "encoding": "big-endian",
+        "name": "ip_a",
+        "type": "ipv4"
+      },
+      {
+        "bits": 16,
+        "bytes": 2,
+        "encoding": "big-endian",
+        "name": "port_a",
+        "type": "u16"
+      },
+      {
+        "bits": 32,
+        "bytes": 4,
+        "encoding": "big-endian",
+        "name": "ip_b",
+        "type": "ipv4"
+      },
+      {
+        "bits": 16,
+        "bytes": 2,
+        "encoding": "big-endian",
+        "name": "port_b",
+        "type": "u16"
+      },
+      {
+        "bits": 8,
+        "bytes": 1,
+        "encoding": "single-byte",
+        "name": "proto",
+        "type": "u8"
+      }
+    ],
+    "name": "tcp_firewall",
+    "table": {
+      "buckets": 64,
+      "clock": "shim_us",
+      "collision": "reject",
+      "expiry": "lazy",
+      "hash": "crc32_13B_be",
+      "idle_timeout_us": 30000000,
+      "slots": 65536
+    },
+    "value": {
+      "bytes": "u64",
+      "last": "u48",
+      "pkts": "u64",
+      "st": {
+        "enum": [
+          "NEW",
+          "EST",
+          "CLOSED"
+        ]
+      }
+    },
+    "version": 1
+  }
+}
