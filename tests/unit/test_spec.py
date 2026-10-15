@@ -73,3 +73,11 @@ def test_rejects_wrong_collision_policy():
     errors = validate_spec(spec)
 
     assert any("collision" in error for error in errors)
+
+def test_rejects_missing_explicit_semantics():
+    spec = copy.deepcopy(load_spec())
+    del spec["semantics"]
+
+    errors = validate_spec(spec)
+
+    assert any("semantics" in error for error in errors)

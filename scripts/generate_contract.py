@@ -11,7 +11,6 @@ sys.path.insert(0, str(ROOT))
 
 import yaml
 
-from ref import model
 from scripts.validate_spec import validate_spec
 
 
@@ -47,13 +46,6 @@ FIELD_LAYOUT = {
         "encoding": "single-byte",
     },
 }
-
-STATE_CODES = {
-    "NEW": model.NEW,
-    "EST": model.EST,
-    "CLOSED": model.CLOSED,
-}
-
 
 def build_contract(spec):
     errors = validate_spec(spec)
@@ -91,34 +83,35 @@ def build_contract(spec):
             },
             "key_fields": key_fields,
             "value": value,
+            "semantics": spec["semantics"],
         },
         "runtime_contract": {
             "semantics_source": "ref/model.py",
             "flow_key": {
-                "canonicalization": (
-                    "Sort endpoints by (IPv4 address << 16) | port"
-                ),
+                "canonicalization":
+                    spec["semantics"]["flow_key"]["canonicalization"],
                 "serialized_length_bytes": key_bytes,
-                "field_encoding": "network byte order",
+                "field_encoding":
+                    spec["semantics"]["flow_key"]["encoding"],
             },
             "hash": {
                 "algorithm": "CRC-32",
                 "input_bytes": key_bytes,
                 "slot_expression": "crc32(key_bytes) % slots",
             },
-            "state_codes": STATE_CODES,
+            "state_codes": spec["semantics"]["state_codes"],
             "timeout": {
-                "unit": "us",
-                "live_when_elapsed_le_timeout": True,
-                "expired_flow_behavior": (
-                    "Allow and replace on inside SYN without ACK; "
-                    "otherwise drop"
+                "unit": spec["semantics"]["timeout"]["unit"],
+                "live_when_elapsed_le_timeout": (
+                    spec["semantics"]["timeout"]["boundary"] == "inclusive"
                 ),
+                "expired_flow_behavior":
+                    spec["semantics"]["timeout"]["expired_flow_behavior"],
                 "expiry_policy": spec["expiry"],
             },
             "counters": {
-                "width_bits": 64,
-                "overflow": "wrap modulo 2^64",
+                "width_bits": int(value["pkts"][1:]),
+                "overflow": spec["semantics"]["counters"]["overflow"],
                 "fields": ["pkts", "bytes"],
             },
         },

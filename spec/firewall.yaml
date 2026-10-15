@@ -28,3 +28,21 @@ value:
   last: u48
   pkts: u64
   bytes: u64
+
+semantics:
+  flow_key:
+    canonicalization: sort_endpoints_by_ip_then_port
+    encoding: network_byte_order
+
+  state_codes:
+    NEW: 1
+    EST: 2
+    CLOSED: 3
+
+  timeout:
+    unit: us
+    boundary: inclusive
+    expired_flow_behavior: allow_and_replace_on_inside_syn_without_ack_else_drop
+
+  counters:
+    overflow: wrap_modulo_2_pow_64

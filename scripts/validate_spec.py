@@ -47,7 +47,30 @@ EXPECTED_VALUE = {
     "bytes": "u64",
 }
 
-EXPECTED_TOP_LEVEL = set(EXPECTED_SCALARS) | {"key", "value"}
+EXPECTED_SEMANTICS = {
+    "flow_key": {
+        "canonicalization": "sort_endpoints_by_ip_then_port",
+        "encoding": "network_byte_order",
+    },
+    "state_codes": {
+        "NEW": 1,
+        "EST": 2,
+        "CLOSED": 3,
+    },
+    "timeout": {
+        "unit": "us",
+        "boundary": "inclusive",
+        "expired_flow_behavior":
+            "allow_and_replace_on_inside_syn_without_ack_else_drop",
+    },
+    "counters": {
+        "overflow": "wrap_modulo_2_pow_64",
+    },
+}
+
+EXPECTED_TOP_LEVEL = set(EXPECTED_SCALARS) | {
+    "key", "value", "semantics"
+}
 
 
 def validate_spec(spec):
@@ -103,6 +126,13 @@ def validate_spec(spec):
             f"{EXPECTED_KEY!r}; got {spec.get('key')!r}."
         )
 
+    semantics = spec.get("semantics")
+    if semantics != EXPECTED_SEMANTICS:
+        fail(
+            "semantics must match the declared v1 contract; "
+            f"got {semantics!r}."
+        )
+
     value = spec.get("value")
 
     if not isinstance(value, dict):
@@ -142,9 +172,19 @@ def validate_spec(spec):
             f"idle_timeout_us={timeout}."
         )
 
-    enum_values = (model.NEW, model.EST, model.CLOSED)
-    if enum_values != (1, 2, 3):
-        fail(f"Unexpected reference-model state values: {enum_values!r}.")
+    declared_codes = (spec.get("semantics") or {}).get("state_codes", {})
+    expected_codes = (
+        declared_codes.get("NEW"),
+        declared_codes.get("EST"),
+        declared_codes.get("CLOSED"),
+    )
+    model_codes = (model.NEW, model.EST, model.CLOSED)
+
+    if model_codes != expected_codes:
+        fail(
+            "Reference-model state codes do not match the specification: "
+            f"model={model_codes!r}, spec={expected_codes!r}."
+        )
 
     if model.M64 != (1 << 64) - 1:
         fail("Reference model's counter mask is not uint64.")

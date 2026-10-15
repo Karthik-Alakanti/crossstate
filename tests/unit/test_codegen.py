@@ -23,11 +23,22 @@ def test_contract_matches_specification():
     assert contract["spec"]["table"]["slots"] == spec["slots"]
     assert contract["spec"]["table"]["idle_timeout_us"] == spec["idle_timeout_us"]
     assert contract["runtime_contract"]["flow_key"]["serialized_length_bytes"] == 13
-    assert contract["runtime_contract"]["state_codes"] == {
-        "NEW": 1,
-        "EST": 2,
-        "CLOSED": 3,
-    }
+    assert contract["spec"]["semantics"] == spec["semantics"]
+    assert contract["runtime_contract"]["state_codes"] == (
+        spec["semantics"]["state_codes"]
+    )
+    assert (
+        contract["runtime_contract"]["flow_key"]["canonicalization"]
+        == spec["semantics"]["flow_key"]["canonicalization"]
+    )
+    assert (
+        contract["runtime_contract"]["flow_key"]["field_encoding"]
+        == spec["semantics"]["flow_key"]["encoding"]
+    )
+    assert (
+        contract["runtime_contract"]["counters"]["overflow"]
+        == spec["semantics"]["counters"]["overflow"]
+    )
 
 
 def test_contract_serialization_is_deterministic():
@@ -49,3 +60,14 @@ def test_generator_rejects_invalid_specification():
         assert "collision" in str(exc)
     else:
         raise AssertionError("Invalid specification was accepted")
+
+def test_generator_rejects_unsupported_semantic_change():
+    spec = load_spec()
+    spec["semantics"]["flow_key"]["encoding"] = "little_endian"
+
+    try:
+        build_contract(spec)
+    except ValueError as exc:
+        assert "semantics" in str(exc)
+    else:
+        raise AssertionError("Unsupported semantics were accepted")
