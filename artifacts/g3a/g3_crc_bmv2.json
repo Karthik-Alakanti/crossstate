@@ -1,0 +1,870 @@
+{
+  "test": "BMv2 CRC slot and state-record validation",
+  "target": "BMv2 simple_switch_grpc / P4 v1model",
+  "vectors": 20,
+  "passed": 20,
+  "failed": 0,
+  "result": "PASS",
+  "cases": [
+    {
+      "index": 1,
+      "source": "crc_vector",
+      "key": [
+        577090037,
+        37303,
+        3639700191,
+        52577,
+        6
+      ],
+      "key_bytes": "2265b1f591b7d8f16adfcd6106",
+      "expected_slot": 30468,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          577090037,
+          37303,
+          3639700191,
+          52577,
+          6
+        ],
+        "st": 1,
+        "last": 4000000,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          577090037,
+          37303,
+          3639700191,
+          52577,
+          6
+        ],
+        "st": 1,
+        "last": 4000000,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 2,
+      "source": "crc_vector",
+      "key": [
+        1095513148,
+        7727,
+        3280387012,
+        4135,
+        6
+      ],
+      "key_bytes": "414c343c1e2fc386bbc4102706",
+      "expected_slot": 49483,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          1095513148,
+          7727,
+          3280387012,
+          4135,
+          6
+        ],
+        "st": 1,
+        "last": 4000001,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          1095513148,
+          7727,
+          3280387012,
+          4135,
+          6
+        ],
+        "st": 1,
+        "last": 4000001,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 3,
+      "source": "crc_vector",
+      "key": [
+        1930549411,
+        30949,
+        2127877499,
+        49870,
+        6
+      ],
+      "key_bytes": "7311d8a378e57ed4d57bc2ce06",
+      "expected_slot": 15007,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          1930549411,
+          30949,
+          2127877499,
+          49870,
+          6
+        ],
+        "st": 1,
+        "last": 4000002,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          1930549411,
+          30949,
+          2127877499,
+          49870,
+          6
+        ],
+        "st": 1,
+        "last": 4000002,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 4,
+      "source": "crc_vector",
+      "key": [
+        2798570523,
+        24878,
+        3387541014,
+        13759,
+        6
+      ],
+      "key_bytes": "a6cecc1b612ec9e9c61635bf06",
+      "expected_slot": 26763,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          2798570523,
+          24878,
+          3387541014,
+          13759,
+          6
+        ],
+        "st": 1,
+        "last": 4000003,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          2798570523,
+          24878,
+          3387541014,
+          13759,
+          6
+        ],
+        "st": 1,
+        "last": 4000003,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 5,
+      "source": "crc_vector",
+      "key": [
+        121751464,
+        58544,
+        403123852,
+        31972,
+        6
+      ],
+      "key_bytes": "0741c7a8e4b018072e8c7ce406",
+      "expected_slot": 46797,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          121751464,
+          58544,
+          403123852,
+          31972,
+          6
+        ],
+        "st": 1,
+        "last": 4000004,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          121751464,
+          58544,
+          403123852,
+          31972,
+          6
+        ],
+        "st": 1,
+        "last": 4000004,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 6,
+      "source": "crc_vector",
+      "key": [
+        1858720390,
+        39809,
+        3589583794,
+        25546,
+        6
+      ],
+      "key_bytes": "6ec9d2869b81d5f4b3b263ca06",
+      "expected_slot": 28614,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          1858720390,
+          39809,
+          3589583794,
+          25546,
+          6
+        ],
+        "st": 1,
+        "last": 4000005,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          1858720390,
+          39809,
+          3589583794,
+          25546,
+          6
+        ],
+        "st": 1,
+        "last": 4000005,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 7,
+      "source": "crc_vector",
+      "key": [
+        9045414,
+        45602,
+        3273968005,
+        50276,
+        6
+      ],
+      "key_bytes": "008a05a6b222c324c985c46406",
+      "expected_slot": 41336,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          9045414,
+          45602,
+          3273968005,
+          50276,
+          6
+        ],
+        "st": 1,
+        "last": 4000006,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          9045414,
+          45602,
+          3273968005,
+          50276,
+          6
+        ],
+        "st": 1,
+        "last": 4000006,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 8,
+      "source": "crc_vector",
+      "key": [
+        1912923437,
+        17454,
+        3098990846,
+        52548,
+        6
+      ],
+      "key_bytes": "7204e52d442eb8b6d8fecd4406",
+      "expected_slot": 40796,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          1912923437,
+          17454,
+          3098990846,
+          52548,
+          6
+        ],
+        "st": 1,
+        "last": 4000007,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          1912923437,
+          17454,
+          3098990846,
+          52548,
+          6
+        ],
+        "st": 1,
+        "last": 4000007,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 9,
+      "source": "crc_vector",
+      "key": [
+        982526257,
+        38741,
+        4059906722,
+        6699,
+        6
+      ],
+      "key_bytes": "3a9029319755f1fd42a21a2b06",
+      "expected_slot": 23137,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          982526257,
+          38741,
+          4059906722,
+          6699,
+          6
+        ],
+        "st": 1,
+        "last": 4000008,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          982526257,
+          38741,
+          4059906722,
+          6699,
+          6
+        ],
+        "st": 1,
+        "last": 4000008,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 10,
+      "source": "crc_vector",
+      "key": [
+        131383004,
+        1462,
+        3871601465,
+        20803,
+        6
+      ],
+      "key_bytes": "07d4bedc05b6e6c3f339514306",
+      "expected_slot": 29057,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          131383004,
+          1462,
+          3871601465,
+          20803,
+          6
+        ],
+        "st": 1,
+        "last": 4000009,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          131383004,
+          1462,
+          3871601465,
+          20803,
+          6
+        ],
+        "st": 1,
+        "last": 4000009,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 11,
+      "source": "crc_vector",
+      "key": [
+        109289145,
+        42568,
+        2325348894,
+        603,
+        6
+      ],
+      "key_bytes": "06839eb9a6488a9a021e025b06",
+      "expected_slot": 31297,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          109289145,
+          42568,
+          2325348894,
+          603,
+          6
+        ],
+        "st": 1,
+        "last": 4000010,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          109289145,
+          42568,
+          2325348894,
+          603,
+          6
+        ],
+        "st": 1,
+        "last": 4000010,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 12,
+      "source": "crc_vector",
+      "key": [
+        1637259727,
+        44989,
+        4033614922,
+        57752,
+        6
+      ],
+      "key_bytes": "619699cfafbdf06c144ae19806",
+      "expected_slot": 5440,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          1637259727,
+          44989,
+          4033614922,
+          57752,
+          6
+        ],
+        "st": 1,
+        "last": 4000011,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          1637259727,
+          44989,
+          4033614922,
+          57752,
+          6
+        ],
+        "st": 1,
+        "last": 4000011,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 13,
+      "source": "crc_vector",
+      "key": [
+        930287327,
+        63507,
+        1812976885,
+        47569,
+        6
+      ],
+      "key_bytes": "37730edff8136c0fd4f5b9d106",
+      "expected_slot": 27077,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          930287327,
+          63507,
+          1812976885,
+          47569,
+          6
+        ],
+        "st": 1,
+        "last": 4000012,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          930287327,
+          63507,
+          1812976885,
+          47569,
+          6
+        ],
+        "st": 1,
+        "last": 4000012,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 14,
+      "source": "crc_vector",
+      "key": [
+        124729223,
+        34578,
+        952158461,
+        50049,
+        6
+      ],
+      "key_bytes": "076f3787871238c0c8fdc38106",
+      "expected_slot": 6227,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          124729223,
+          34578,
+          952158461,
+          50049,
+          6
+        ],
+        "st": 1,
+        "last": 4000013,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          124729223,
+          34578,
+          952158461,
+          50049,
+          6
+        ],
+        "st": 1,
+        "last": 4000013,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 15,
+      "source": "crc_vector",
+      "key": [
+        1880712864,
+        61549,
+        2129497364,
+        36232,
+        6
+      ],
+      "key_bytes": "701966a0f06d7eed8d148d8806",
+      "expected_slot": 58709,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          1880712864,
+          61549,
+          2129497364,
+          36232,
+          6
+        ],
+        "st": 1,
+        "last": 4000014,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          1880712864,
+          61549,
+          2129497364,
+          36232,
+          6
+        ],
+        "st": 1,
+        "last": 4000014,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 16,
+      "source": "crc_vector",
+      "key": [
+        991564255,
+        44357,
+        1001090105,
+        22655,
+        6
+      ],
+      "key_bytes": "3b1a11dfad453bab6c39587f06",
+      "expected_slot": 62856,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          991564255,
+          44357,
+          1001090105,
+          22655,
+          6
+        ],
+        "st": 1,
+        "last": 4000015,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          991564255,
+          44357,
+          1001090105,
+          22655,
+          6
+        ],
+        "st": 1,
+        "last": 4000015,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 17,
+      "source": "crc_vector",
+      "key": [
+        939657385,
+        49869,
+        1973981844,
+        62406,
+        6
+      ],
+      "key_bytes": "380208a9c2cd75a89294f3c606",
+      "expected_slot": 10705,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          939657385,
+          49869,
+          1973981844,
+          62406,
+          6
+        ],
+        "st": 1,
+        "last": 4000016,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          939657385,
+          49869,
+          1973981844,
+          62406,
+          6
+        ],
+        "st": 1,
+        "last": 4000016,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 18,
+      "source": "crc_vector",
+      "key": [
+        92297589,
+        27274,
+        1244602538,
+        60719,
+        6
+      ],
+      "key_bytes": "058059756a8a4a2f20aaed2f06",
+      "expected_slot": 12350,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          92297589,
+          27274,
+          1244602538,
+          60719,
+          6
+        ],
+        "st": 1,
+        "last": 4000017,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          92297589,
+          27274,
+          1244602538,
+          60719,
+          6
+        ],
+        "st": 1,
+        "last": 4000017,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 19,
+      "source": "crc_vector",
+      "key": [
+        2389953095,
+        60436,
+        3597370014,
+        60048,
+        6
+      ],
+      "key_bytes": "8e73ca47ec14d66b829eea9006",
+      "expected_slot": 57336,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          2389953095,
+          60436,
+          3597370014,
+          60048,
+          6
+        ],
+        "st": 1,
+        "last": 4000018,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          2389953095,
+          60436,
+          3597370014,
+          60048,
+          6
+        ],
+        "st": 1,
+        "last": 4000018,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    },
+    {
+      "index": 20,
+      "source": "crc_vector",
+      "key": [
+        798461319,
+        41245,
+        2758633299,
+        6553,
+        6
+      ],
+      "key_bytes": "2f978d87a11da46d6753199906",
+      "expected_slot": 34581,
+      "returned_flags": 5,
+      "wire_allow": true,
+      "expected_record": {
+        "key": [
+          798461319,
+          41245,
+          2758633299,
+          6553,
+          6
+        ],
+        "st": 1,
+        "last": 4000019,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "actual_record": {
+        "key": [
+          798461319,
+          41245,
+          2758633299,
+          6553,
+          6
+        ],
+        "st": 1,
+        "last": 4000019,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "pass": true
+    }
+  ]
+}
