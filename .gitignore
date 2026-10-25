@@ -12,3 +12,9 @@ __pycache__/
 # Build/object files
 *.o
 *.so
+
+# Local BMv2/XDP runtime artifacts (keep locally, do not commit)
+/artifacts/bmv2.log
+/artifacts/xdp_load.log
+/artifacts/firewall.json
+/artifacts/state/
