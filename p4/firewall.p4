@@ -398,7 +398,7 @@ control MyIngress(
              * semantics are kept aligned with the guide.
              * ============================================
              */
-            if (shadow && (meta.synced == 0)) {
+            if (shadow && live && (meta.synced == 0)) {
 
                 /*
                  * b3 = skipped
@@ -520,6 +520,10 @@ control MyIngress(
                      */
                     if (meta.create) {
 
+                        /*
+                         * A reused slot must not inherit stale readiness.
+                         */
+                        r_synced.write(meta.slot, 0);
                         r_valid.write(meta.slot, 1);
 
                         r_ipa.write(meta.slot, meta.ipa);

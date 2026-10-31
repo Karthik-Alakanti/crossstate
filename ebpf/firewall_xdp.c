@@ -201,6 +201,7 @@ static __always_inline void store_new(
 
     rec->st = ST_NEW;
     rec->valid = 1;
+    rec->synced = 0; /* Never inherit readiness from an expired slot. */
     rec->last = ts;
     rec->pkts = 1;
     rec->bytes = packet_bytes;
@@ -339,23 +340,22 @@ int crossstate_xdp(struct xdp_md *ctx)
         return XDP_ABORTED;
 
     /*
-     * Do not process or mutate unsynchronized shadow state.
-     * Shadow traffic is observational, never authoritative.
-     */
-    if (shadow && !rec->synced) {
-        shim->flags |= FLAG_SKIPPED;
-        shim->flags &= (__u8)~FLAG_ALLOW;
-        return XDP_PASS;
-    }
-
-    /*
-     * Match the Python reference's lazy-expiry condition:
-     * (event_timestamp - last_timestamp) <= timeout.
-     * A decreasing timestamp also satisfies that Python condition.
+     * Determine whether this slot contains a live flow before applying
+     * the shadow gate. Empty and expired slots may accept a new SYN.
      */
     int live = rec->valid &&
         (ts < rec->last ||
          (ts - rec->last) <= IDLE_TIMEOUT_US);
+
+    /*
+     * An existing live flow must be synchronized before shadow updates.
+     * Empty and expired slots are allowed through for new-flow creation.
+     */
+    if (shadow && live && !rec->synced) {
+        shim->flags |= FLAG_SKIPPED;
+        shim->flags &= (__u8)~FLAG_ALLOW;
+        return XDP_PASS;
+    }
 
     int allow = 0;
 
