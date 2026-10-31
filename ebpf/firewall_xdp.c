@@ -45,11 +45,15 @@ struct flow_record {
     __u8 key[KEY_LEN];
     __u8 st;
     __u8 valid;
+    __u8 synced; /* Byte offset 15; preserves the 40-byte map ABI. */
 
     __u64 last;
     __u64 pkts;
     __u64 bytes;
 };
+
+_Static_assert(sizeof(struct flow_record) == 40,
+               "flow_record ABI must remain 40 bytes");
 
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
@@ -287,6 +291,7 @@ int crossstate_xdp(struct xdp_md *ctx)
     int rst = (tcp_flags & 0x04) != 0;
 
     int inside = (shim->flags & FLAG_INSIDE) != 0;
+    int shadow = (shim->flags & FLAG_SHADOW) != 0;
     int init = inside && syn && !ack;
 
     __u64 ts = read_ts_us(shim);
@@ -332,6 +337,16 @@ int crossstate_xdp(struct xdp_md *ctx)
 
     if (!rec)
         return XDP_ABORTED;
+
+    /*
+     * Do not process or mutate unsynchronized shadow state.
+     * Shadow traffic is observational, never authoritative.
+     */
+    if (shadow && !rec->synced) {
+        shim->flags |= FLAG_SKIPPED;
+        shim->flags &= (__u8)~FLAG_ALLOW;
+        return XDP_PASS;
+    }
 
     /*
      * Match the Python reference's lazy-expiry condition:
@@ -403,6 +418,10 @@ int crossstate_xdp(struct xdp_md *ctx)
         shim->flags |= FLAG_ALLOW;
     else
         shim->flags &= (__u8)~FLAG_ALLOW;
+
+    /* Shadow mode reports decisions but never enforces them. */
+    if (shadow)
+        return XDP_PASS;
 
 #if CROSSSTATE_TEST_ECHO
     /*
