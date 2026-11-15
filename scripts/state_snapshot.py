@@ -37,7 +37,9 @@ SNAPSHOT_FIELDS = {
     "records",
 }
 
-RECORD_FIELDS = {"slot", "key", "st", "last", "pkts", "bytes", "chain_index"}
+REQUIRED_RECORD_FIELDS = {"slot", "key", "st", "last", "pkts", "bytes"}
+OPTIONAL_RECORD_FIELDS = {"chain_index"}
+RECORD_FIELDS = REQUIRED_RECORD_FIELDS | OPTIONAL_RECORD_FIELDS
 
 
 def _is_uint(value, maximum):
@@ -100,17 +102,18 @@ def validate_snapshot(snapshot):
             fail(f"{prefix} must be a JSON object.")
             continue
 
-        if set(rec) != RECORD_FIELDS:
-            missing = RECORD_FIELDS - set(rec)
-            extra = set(rec) - RECORD_FIELDS
-            if missing:
-                fail(f"{prefix} missing fields: {sorted(missing)}")
-            if extra:
-                fail(f"{prefix} has unexpected fields: {sorted(extra)}")
+        if not REQUIRED_RECORD_FIELDS.issubset(set(rec)):
+            missing = REQUIRED_RECORD_FIELDS - set(rec)
+            fail(f"{prefix} missing required fields: {sorted(missing)}")
+            continue
+
+        extra = set(rec) - RECORD_FIELDS
+        if extra:
+            fail(f"{prefix} has unexpected fields: {sorted(extra)}")
             continue
 
         slot = rec["slot"]
-        chain_index = rec["chain_index"]
+        chain_index = rec.get("chain_index", 0)
         key = rec["key"]
 
         if not _is_uint(slot, SLOT_COUNT - 1):
