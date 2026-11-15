@@ -1,0 +1,86 @@
+{
+  "created_utc": "2026-11-15T12:21:57.808636+00:00",
+  "overall_pass": true,
+  "results": {
+    "bucket_overflow": {
+      "status": "PASS",
+      "slot": 3093,
+      "total_keys": 7,
+      "allowed": 4,
+      "rejected": 3,
+      "breakpoint": "Depth 4 limit enforced"
+    },
+    "high_flow_capacity": {
+      "status": "PASS",
+      "results": [
+        {
+          "flows": 100,
+          "allowed": 100,
+          "rejected": 0,
+          "rejection_rate_percent": 0.0
+        },
+        {
+          "flows": 500,
+          "allowed": 500,
+          "rejected": 0,
+          "rejection_rate_percent": 0.0
+        },
+        {
+          "flows": 1000,
+          "allowed": 1000,
+          "rejected": 0,
+          "rejection_rate_percent": 0.0
+        },
+        {
+          "flows": 2000,
+          "allowed": 2000,
+          "rejected": 0,
+          "rejection_rate_percent": 0.0
+        },
+        {
+          "flows": 5000,
+          "allowed": 5000,
+          "rejected": 0,
+          "rejection_rate_percent": 0.0
+        },
+        {
+          "flows": 10000,
+          "allowed": 10000,
+          "rejected": 0,
+          "rejection_rate_percent": 0.0
+        }
+      ],
+      "breakpoint": "Rejection rate 0.0% at 10000 flows"
+    },
+    "rapid_modifications": {
+      "status": "PASS",
+      "cycles": 100,
+      "final_records": 1,
+      "breakpoint": "No corruption after 100 rapid modify cycles"
+    },
+    "edge_case_keys": {
+      "status": "PASS",
+      "tested": 7,
+      "errors": 0,
+      "breakpoint": "Edge cases handled correctly"
+    },
+    "malformed_snapshot": {
+      "status": "PASS",
+      "tested": 4,
+      "rejected": 4,
+      "crashes": 0,
+      "breakpoint": "Malformed snapshots rejected without crashing"
+    },
+    "sequential_migrations": {
+      "status": "PASS",
+      "iterations": 50,
+      "failures": 0,
+      "breakpoint": "No degradation after 50 sequential migrations"
+    },
+    "source_mutation": {
+      "status": "PASS",
+      "detected": true,
+      "breakpoint": "Source mutation between exports detected"
+    }
+  }
+}

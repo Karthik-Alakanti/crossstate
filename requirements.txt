@@ -1,0 +1,23 @@
+# CrossState Python Dependencies
+# Install with: pip install -r requirements.txt
+# On PEP 668 systems: pip install -r requirements.txt --break-system-packages
+
+# Core dependencies
+thrift==0.25.0
+scapy==2.5.0
+
+# Data processing and visualization
+numpy>=1.24.0
+matplotlib>=3.7.0
+pandas>=2.0.0
+
+# Optional: for Jupyter notebooks and interactive analysis
+# jupyter>=1.0.0
+# ipywidgets>=8.0.0
+
+# Optional: for advanced plotting
+# seaborn>=0.12.0
+# plotly>=5.0.0
+
+# Optional: for LaTeX compilation (not a Python dependency)
+# Install texlive-full or equivalent on your system
