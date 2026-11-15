@@ -2,7 +2,7 @@
 
 | System | Year | Platform | Downtime (ms) | Records written | Throughput (rec/s) | Packet loss (%) | Decision agreement (%) | State equivalence (%) | Rollback (%) | Per-record (ms) | Concurrent | Cross-platform | Verification |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| CrossState | 2026 | BMv2 (P4) <-> XDP (eBPF) | 100.000 | 86 | 11.490 | n/a | n/a | 100.000 | n/a | n/a | yes | yes | audit |
+| CrossState | 2026 | BMv2 (P4) <-> XDP (eBPF) | 100.000 | 86 | 11.773 | n/a | n/a | 100.000 | n/a | n/a | yes | yes | audit |
 | RedPlane | 2021 | Tofino switches | 950.000 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | yes | no | replication |
 | Cora/Vela | 2024 | SoC SmartNIC <-> host/Arm CPU | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | yes | yes | none |
 | SwitchNIC | 2025 | Tofino switch + ARM SmartNIC | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | yes | yes | none |

@@ -2,7 +2,7 @@
   "crossstate": {
     "experiment": "mawi_live_continuous_migration",
     "checkpoints": 1,
-    "total_checkpoint_seconds": 7.484744,
+    "total_checkpoint_seconds": 7.304698,
     "per_record_seconds": null,
     "records_written": 86,
     "records_total": 86,

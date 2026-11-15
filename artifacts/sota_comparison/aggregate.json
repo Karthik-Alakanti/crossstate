@@ -1,11 +1,11 @@
 {
-  "generated_utc": "2026-11-15T11:29:52.196583+00:00",
+  "generated_utc": "2026-11-15T11:42:01.489967+00:00",
   "experiments": [
     {
       "source": "/home/karthik/work/crossstate/artifacts/live_migration/sota_comparison.json",
       "experiment": "mawi_live_continuous_migration",
       "checkpoints": 1,
-      "total_checkpoint_seconds": 7.484744,
+      "total_checkpoint_seconds": 7.304698,
       "per_record_seconds": null,
       "records_written": 86,
       "packet_loss_percent": null,
@@ -21,7 +21,7 @@
       "source": "/home/karthik/work/crossstate/artifacts/sota_comparison/sota_comparison.json",
       "experiment": "mawi_live_continuous_migration",
       "checkpoints": 1,
-      "total_checkpoint_seconds": 7.484744,
+      "total_checkpoint_seconds": 7.586256,
       "per_record_seconds": null,
       "records_written": 86,
       "packet_loss_percent": null,
