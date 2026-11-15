@@ -36,9 +36,12 @@ from scripts.sota_metrics import (
 def _extract_cs_result(summary: dict[str, Any]) -> CrossStateResult | None:
     """Extract a CrossStateResult from a summary JSON's sota_comparison block."""
     sota = summary.get("sota_comparison")
-    if not sota:
-        return None
+    if sota is None:
+        # Direct format: the file IS the sota_json() output (no wrapper)
+        sota = summary
     cs = sota.get("crossstate")
+    if not cs:
+        return None
     if not cs:
         return None
     return CrossStateResult(
@@ -66,13 +69,18 @@ def _extract_cs_result(summary: dict[str, Any]) -> CrossStateResult | None:
 def find_summaries(artifacts_dir: Path) -> list[Path]:
     """Recursively find summary JSON files with sota_comparison blocks."""
     found: list[Path] = []
-    for path in artifacts_dir.rglob("*summary*.json"):
-        try:
-            data = json.loads(path.read_text())
-        except Exception:
-            continue
-        if data.get("sota_comparison"):
-            found.append(path)
+    for pattern in (
+        "*summary*.json",
+        "*migration_result*.json",
+        "*sota_comparison*.json",
+    ):
+        for path in artifacts_dir.rglob(pattern):
+            try:
+                data = json.loads(path.read_text())
+            except Exception:
+                continue
+            if data.get("sota_comparison") or data.get("crossstate"):
+                found.append(path)
     return found
 
 
