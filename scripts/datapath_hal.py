@@ -319,23 +319,25 @@ class XdpTarget(DatapathTarget):
             bytes=int.from_bytes(raw[32:40], "little"),
         )
 
+    def _parse_bpftool_value(self, val: Any) -> bytes:
+        """Parse a bpftool JSON value that may be dict, str, list of hex strings, or list of ints."""
+        if isinstance(val, dict):
+            return bytes.fromhex(val.get("value", "").replace(":", ""))
+        if isinstance(val, str):
+            return bytes.fromhex(val.replace(":", ""))
+        if isinstance(val, list):
+            return bytes(int(x, 16) if isinstance(x, str) else x for x in val)
+        return bytes(val)
+
     def export_all(self) -> list[DatapathRecord]:
         map_id = self._map_id()
         dump = self._run_json(["bpftool", "-j", "map", "dump", "id", str(map_id)])
         entries = dump if isinstance(dump, list) else dump.get("entries", [])
         records = []
         for entry in entries:
-            raw_map_key = entry["key"]
-            if isinstance(raw_map_key, dict):
-                raw_map_key = raw_map_key.get("value", b"")
-            if isinstance(raw_map_key, str):
-                raw_map_key = bytes.fromhex(raw_map_key.replace(":", ""))
+            raw_map_key = self._parse_bpftool_value(entry["key"])
             slot = int.from_bytes(raw_map_key[:4], "little")
-            raw_val = entry["value"]
-            if isinstance(raw_val, dict):
-                raw_val = raw_val.get("value", b"")
-            if isinstance(raw_val, list):
-                raw_val = bytes(raw_val)
+            raw_val = self._parse_bpftool_value(entry["value"])
             rec = self._decode(slot, raw_val)
             if rec is not None:
                 records.append(rec)
@@ -350,10 +352,7 @@ class XdpTarget(DatapathTarget):
             *[f"{b:02x}" for b in key],
         ])
         raw = result["value"]
-        if isinstance(raw, list):
-            raw = bytes(raw)
-        elif isinstance(raw, str):
-            raw = bytes.fromhex(raw.replace(":", ""))
+        raw = self._parse_bpftool_value(raw)
         return self._decode(slot, raw)
 
     def write_record(self, record: DatapathRecord, verify: bool = True) -> None:
