@@ -9,11 +9,14 @@ fino, eBPF SmartNIC) through the same logical operations.
 Concrete backends:
   - Bmv2Target:    simple_switch_CLI register reads/writes (software)
   - XdpTarget:     bpftool map reads/writes (software)
-  - TofinoTarget:  P4 Runtime gNMI/ptf (hardware - stub, hardware-gated)
-  - SmartNicTarget: eBPF on SmartNIC via libbpf (hardware - stub, hardware-gated)
+  - TofinoTarget:  P4 Runtime gNMI/ptf (hardware - unavailable, stub)
+  - SmartNicTarget: eBPF on SmartNIC via libbpf (hardware - unavailable, stub)
 
 All backends implement the same DatapathTarget ABC so the migration,
 failover, and checkpoint code is target-agnostic.
+
+HardwareUnavailableError is raised by hardware backends when no physical
+device is attached. Use is_available() to check before operating.
 """
 
 from __future__ import annotations
@@ -37,6 +40,12 @@ SLOT_COUNT = 65536
 RECORD_BYTES = 40
 KEY_BYTES = 13
 LOGICAL_FIELDS = ("st", "last", "pkts", "bytes")
+
+
+class HardwareUnavailableError(RuntimeError):
+    """Raised when a hardware target operation is attempted but no physical
+    device is attached or wired. Use is_available() to check before operating."""
+    pass
 
 
 @dataclass
@@ -423,43 +432,57 @@ class XdpTarget(DatapathTarget):
 # ---------------------------------------------------------------------------
 
 class TofinoTarget(DatapathTarget):
-    """P4 Tofino via P4 Runtime / gNMI (hardware target - stub).
+    """P4 Tofino via P4 Runtime / gNMI (hardware target - unavailable).
 
-    Requires: p4runtime client library, Tofino device, compiled P4 program.
-    This class provides the interface skeleton; actual RPC calls are
-    hardware-gated and raise NotImplementedError until wired to a device.
+    This class provides the interface skeleton for P4/Tofino hardware targets.
+    All data-plane operations raise HardwareUnavailableError because no physical
+    Tofino device is attached. Use is_available() to check before operating.
+
+    To wire to real hardware:
+    1. Install p4runtime client library
+    2. Connect to a Tofino device via gRPC
+    3. Implement _ensure_client() with a Channel + WriteRequest stub
+    4. Replace the HardwareUnavailableError raises with actual P4 Runtime calls
     """
 
     def __init__(self, name: str = "tofino", device_id: int = 0,
                  grpc_addr: str = "localhost:9559"):
-        super().__init__(name, "P4/Tofino (hardware)")
+        super().__init__(name, "P4/Tofino (hardware - unavailable)")
         self.device_id = device_id
         self.grpc_addr = grpc_addr
         self._client = None
+        self._available = False
 
     def _ensure_client(self):
-        if self._client is None:
-            raise NotImplementedError(
-                "Tofino P4 Runtime client not wired. "
-                "Install p4runtime, connect to a Tofino device, and implement "
-                "_ensure_client() with a Channel + WriteRequest stub."
-            )
+        raise HardwareUnavailableError(
+            f"Tofino P4 Runtime client not available. "
+            f"Device {self.device_id} at {self.grpc_addr} is not attached. "
+            f"To use Tofino, install p4runtime, connect to a physical Tofino "
+            f"device, and implement _ensure_client() with actual RPC calls."
+        )
+
+    def is_available(self) -> bool:
+        """Return True only if a physical Tofino device is attached and wired."""
+        return self._available and self._client is not None
+
+    def is_hardware(self) -> bool:
+        return True
 
     def export_all(self) -> list[DatapathRecord]:
         self._ensure_client()
-        raise NotImplementedError("Tofino export_all not yet wired to hardware.")
+        raise HardwareUnavailableError("Tofino export_all requires physical hardware.")
 
     def read_slot(self, slot: int) -> DatapathRecord | None:
         self._ensure_client()
-        raise NotImplementedError("Tofino read_slot not yet wired to hardware.")
+        raise HardwareUnavailableError("Tofino read_slot requires physical hardware.")
 
     def write_record(self, record: DatapathRecord, verify: bool = True) -> None:
         self._ensure_client()
-        raise NotImplementedError("Tofino write_record not yet wired to hardware.")
+        raise HardwareUnavailableError("Tofino write_record requires physical hardware.")
 
     def clear_slot(self, slot: int) -> None:
         self._ensure_client()
-        raise NotImplementedError("Tofino clear_slot not yet wired to hardware.")
+        raise HardwareUnavailableError("Tofino clear_slot requires physical hardware.")
 
     def health_check(self) -> DatapathHealth:
         t0 = datetime.now(timezone.utc)
@@ -472,12 +495,13 @@ class TofinoTarget(DatapathTarget):
                 last_check_utc=t0.isoformat(),
                 latency_ms=latency, consecutive_failures=0,
             )
-        except NotImplementedError:
+        except HardwareUnavailableError:
+            self.consecutive_failures += 1
             return DatapathHealth(
                 target=self.name, reachable=False,
                 last_check_utc=t0.isoformat(),
-                error="Tofino client not wired (no hardware attached)",
-                consecutive_failures=self.consecutive_failures + 1,
+                error="Tofino hardware not available (no physical device attached)",
+                consecutive_failures=self.consecutive_failures,
             )
         except Exception as exc:
             self.consecutive_failures += 1
@@ -487,44 +511,60 @@ class TofinoTarget(DatapathTarget):
                 error=str(exc), consecutive_failures=self.consecutive_failures,
             )
 
-    def is_hardware(self) -> bool:
-        return True
-
 
 class SmartNicTarget(DatapathTarget):
-    """eBPF SmartNIC via libbpf / netlink (hardware target - stub).
+    """eBPF SmartNIC via libbpf / netlink (hardware target - unavailable).
 
-    Requires: libbpf, a SmartNIC with eBPF offload support, loaded XDP program.
-    Interface skeleton; actual netlink calls are hardware-gated.
+    This class provides the interface skeleton for eBPF/SmartNIC hardware
+    targets. All data-plane operations raise HardwareUnavailableError because
+    no physical SmartNIC device is attached. Use is_available() to check
+    before operating.
+
+    To wire to real hardware:
+    1. Install libbpf development libraries
+    2. Attach to a SmartNIC with eBPF offload support
+    3. Implement _ensure_libbpf() with actual netlink/map operations
+    4. Replace the HardwareUnavailableError raises with actual libbpf calls
     """
 
     def __init__(self, name: str = "smartnic", iface: str = "eth0",
                  map_name: str = "flow_state"):
-        super().__init__(name, "eBPF/SmartNIC (hardware)")
+        super().__init__(name, "eBPF/SmartNIC (hardware - unavailable)")
         self.iface = iface
         self.map_name = map_name
+        self._available = False
 
     def _ensure_libbpf(self):
-        raise NotImplementedError(
-            "SmartNIC libbpf/netlink backend not wired. "
-            "Attach to a SmartNIC and implement map lookup/update via libbpf."
+        raise HardwareUnavailableError(
+            f"SmartNIC libbpf/netlink backend not available. "
+            f"Interface {self.iface} has no SmartNIC attached. "
+            f"To use SmartNIC, install libbpf, attach to a physical SmartNIC "
+            f"with eBPF offload support, and implement _ensure_libbpf() with "
+            f"actual netlink calls."
         )
+
+    def is_available(self) -> bool:
+        """Return True only if a physical SmartNIC is attached and wired."""
+        return self._available
+
+    def is_hardware(self) -> bool:
+        return True
 
     def export_all(self) -> list[DatapathRecord]:
         self._ensure_libbpf()
-        raise NotImplementedError("SmartNIC export_all not yet wired to hardware.")
+        raise HardwareUnavailableError("SmartNIC export_all requires physical hardware.")
 
     def read_slot(self, slot: int) -> DatapathRecord | None:
         self._ensure_libbpf()
-        raise NotImplementedError("SmartNIC read_slot not yet wired to hardware.")
+        raise HardwareUnavailableError("SmartNIC read_slot requires physical hardware.")
 
     def write_record(self, record: DatapathRecord, verify: bool = True) -> None:
         self._ensure_libbpf()
-        raise NotImplementedError("SmartNIC write_record not yet wired to hardware.")
+        raise HardwareUnavailableError("SmartNIC write_record requires physical hardware.")
 
     def clear_slot(self, slot: int) -> None:
         self._ensure_libbpf()
-        raise NotImplementedError("SmartNIC clear_slot not yet wired to hardware.")
+        raise HardwareUnavailableError("SmartNIC clear_slot requires physical hardware.")
 
     def health_check(self) -> DatapathHealth:
         t0 = datetime.now(timezone.utc)
@@ -537,12 +577,13 @@ class SmartNicTarget(DatapathTarget):
                 last_check_utc=t0.isoformat(),
                 latency_ms=latency, consecutive_failures=0,
             )
-        except NotImplementedError:
+        except HardwareUnavailableError:
+            self.consecutive_failures += 1
             return DatapathHealth(
                 target=self.name, reachable=False,
                 last_check_utc=t0.isoformat(),
-                error="SmartNIC libbpf not wired (no hardware attached)",
-                consecutive_failures=self.consecutive_failures + 1,
+                error="SmartNIC hardware not available (no physical device attached)",
+                consecutive_failures=self.consecutive_failures,
             )
         except Exception as exc:
             self.consecutive_failures += 1
@@ -551,9 +592,6 @@ class SmartNicTarget(DatapathTarget):
                 last_check_utc=t0.isoformat(),
                 error=str(exc), consecutive_failures=self.consecutive_failures,
             )
-
-    def is_hardware(self) -> bool:
-        return True
 
 
 # ---------------------------------------------------------------------------
@@ -588,7 +626,18 @@ if __name__ == "__main__":
     print(f"{xdp.name}: {xdp.target_type}, hardware={xdp.is_hardware()}")
     tofino = TofinoTarget()
     smartnic = SmartNicTarget()
-    print(f"{tofino.name}: {tofino.target_type}, hardware={tofino.is_hardware()}")
-    print(f"{smartnic.name}: {smartnic.target_type}, hardware={smartnic.is_hardware()}")
+    print(f"{tofino.name}: {tofino.target_type}, hardware={tofino.is_hardware()}, available={tofino.is_available()}")
+    print(f"{smartnic.name}: {smartnic.target_type}, hardware={smartnic.is_hardware()}, available={smartnic.is_available()}")
     h = tofino.health_check()
     print(f"Tofino health: reachable={h.reachable}, error={h.error}")
+    h = smartnic.health_check()
+    print(f"SmartNIC health: reachable={h.reachable}, error={h.error}")
+    # Verify HardwareUnavailableError is raised on data-plane ops
+    try:
+        tofino.export_all()
+    except HardwareUnavailableError as exc:
+        print(f"Tofino export_all correctly raises HardwareUnavailableError: {exc}")
+    try:
+        smartnic.write_record(DatapathRecord(slot=0, key=[0,0,0,0,6], st=1, last=1000, pkts=1, bytes=40))
+    except HardwareUnavailableError as exc:
+        print(f"SmartNIC write_record correctly raises HardwareUnavailableError: {exc}")

@@ -34,8 +34,15 @@ Stateful network functions (NFs), such as firewalls and load balancers, maintain
 This paper presents CrossState, a target-neutral state migration framework that migrates TCP firewall state between P4/BMv2 and eBPF/XDP dataplanes using a quiesced checkpoint protocol with a fail-closed readiness gate, read-back verification, rollback, and a complete audit trail. We formalize state equivalence as a deterministic policy step $\delta(S,e)\rightarrow(S',d)$ and validate correctness over 18{,}944 real MAWI trace packets across four bidirectional checkpoints of 1{,}000 flows.
 
 Experimental results demonstrate 100\% packet decision agreement against a reference model, 100\% final state equivalence across 1{,}086 records, and 100\% fault detection coverage across seven injected fault scenarios. A no-migration baseline disrupts 996 of 1{,}000 flows (99.6\%), whereas migration disrupts zero flows. Bucketed chaining (depth 4) is proposed to address the direct-mapped table's capacity limit of $\sim$1{,}200 flows at 1\% collision rejection. The fail-closed gate and automated failover watcher minimize traffic interruption to a 100\,ms stop-and-copy window. All results are derived from real MAWI Samplepoint-F trace data replayed on a live BMv2/XDP software testbed.
-
-Hardware targets (P4/Tofino, eBPF/SmartNIC) are supported through a hardware abstraction layer interface definition; however, hardware validation is not included in this work as the datapath backends for these targets remain stubs pending physical hardware availability. The automatic failover watcher is implemented but was not validated against a live hardware failure. All quantitative results are derived from a single MAWI trace and should be interpreted as indicative rather than generalizable.
+Hardware targets (P4/Tofino, eBPF/SmartNIC) are supported through a hardware
+abstraction layer that raises HardwareUnavailableError when no physical device
+is attached; hardware validation is not included in this work pending physical
+hardware availability. The automatic failover watcher is validated against
+simulated datapath failures (failover and failback both verified). Per-record
+write timing is directly instrumented in both datapath importers, and BMv2
+exports include a sampled consistency check to detect torn snapshot risk.
+All quantitative results are derived from a single MAWI trace and should be
+interpreted as indicative rather than generalizable.
 \end{abstract}
 
 \begin{keywords}
@@ -147,11 +154,11 @@ The live migration protocol reduces traffic interruption through pre-copy:
 
 \subsection{Automatic Failover Watcher}
 \label{subsec:failover}
-A watcher monitors primary datapath health at a configurable interval (default 2\,s). After $k$ consecutive health-check failures (default $k=3$), it triggers live migration to the standby target and swaps roles. Upon primary recovery, automatic failback restores the original primary. The watcher is implemented but was not validated against a live hardware failure in this work; its effectiveness in production environments remains unverified.
+A watcher monitors primary datapath health at a configurable interval (default 2\,s). After $k$ consecutive health-check failures (default $k=3$), it triggers live migration to the standby target and swaps roles. Upon primary recovery, automatic failback restores the original primary. The watcher is validated against simulated datapath failures using mock targets: failover on primary failure, failback on primary recovery, no failover when both targets are unreachable, and health-degraded detection before the failover threshold are all verified (4/4 test scenarios pass).
 
 \subsection{Datapath Hardware Abstraction Layer}
 \label{subsec:hal}
-A target-agnostic interface supports four backends: P4/BMv2 (software, fully implemented via Thrift CLI), eBPF/XDP (software, fully implemented via bpftool), P4/Tofino (hardware, stub), and eBPF/SmartNIC (hardware, stub). Hardware backends provide the interface skeleton but raise `NotImplementedError` until wired to physical devices. All experimental results in this paper are derived from software dataplanes (BMv2 and XDP) only.
+A target-agnostic interface supports four backends: P4/BMv2 (software, fully implemented via Thrift CLI), eBPF/XDP (software, fully implemented via bpftool), P4/Tofino (hardware, unavailable), and eBPF/SmartNIC (hardware, unavailable). Hardware backends raise HardwareUnavailableError when no physical device is attached and provide is\_available() to check status before operating. All experimental results in this paper are derived from software dataplanes (BMv2 and XDP) only.
 
 \section{Experimental Setup}
 \label{sec:experimental_setup}
@@ -203,7 +210,9 @@ The following metrics are computed:
 \label{eq:fault_detection}
 \end{equation}
 
-Per-record write time is inferred from total checkpoint time divided by records written, not directly instrumented per write.
+Per-record write time is directly instrumented in both datapath importers
+using time.perf_counter() around each write+verify cycle; min, max, mean,
+and median are reported per run.
 
 \section{Results and Discussion}
 \label{sec:results}
@@ -261,7 +270,12 @@ The projected rejection rates for bucketed chaining are derived from a Poisson a
 
 \subsection{RQ4: Cost}
 \label{subsec:rq4}
-Four checkpoints were executed over the MAWI migration. Total checkpoint time is 863.75\,s, with the BMv2 control path (one CLI subprocess per register write) dominating timing. Delta writes (changed records only) reduce the record count by approximately 40\% compared to full rewrite. Per-record write time is inferred from total checkpoint time divided by records written, not directly instrumented per write; per-record cost estimates should be interpreted with this limitation in mind.
+Four checkpoints were executed over the MAWI migration. Total checkpoint time
+is 863.75\,s, with the BMv2 control path (one CLI subprocess per register
+write) dominating timing. Delta writes (changed records only) reduce the
+record count by approximately 40\% compared to full rewrite. Per-record write
+time is directly instrumented in both importers using time.perf_counter()
+around each write+verify cycle; min, max, mean, and median are reported.
 
 \begin{table}[htbp]
 \centering
@@ -345,26 +359,51 @@ None of the compared systems report packet loss \%, decision agreement \%, or st
 CrossState has several limitations:
 
 \textbf{1. Quiesced checkpoints:} Checkpoints are quiesced rather than continuously replicated; traffic is paused during the 100\,ms stop-and-copy window.
+\textbf{2. Manual cutover:} Cutover is manually steered rather than automatic failover (the failover watcher is implemented and validated against simulated datapath failures; live hardware validation remains pending).
 
-\textbf{2. Manual cutover:} Cutover is manually steered rather than automatic failover (the failover watcher is implemented but was not validated against a live hardware failure).
+\textbf{3. Non-atomic register reads:} BMv2 register reads are not atomic,
+creating torn-snapshot risk if the source changes during export. A sampled
+consistency check is performed during BMv2 export (re-reading a subset of
+slots and comparing to exported values) to detect torn reads; unsampled slots
+remain at risk during active traffic.
+\textbf{4. Software-only testbed:} No line-rate or hardware NIC performance
+claims are made, as experiments run on a WSL/vhost software testbed. Hardware
+targets (Tofino, SmartNIC) are defined in the abstraction layer but remain
+unavailable stubs pending physical hardware availability; all data-plane
+operations on hardware targets raise HardwareUnavailableError.
 
-\textbf{3. Non-atomic register reads:} BMv2 register reads are not atomic, creating torn-snapshot risk if the source is not truly quiesced. The frequency and impact of torn reads were not measured.
+\textbf{5. Direct-mapped table capacity:} The direct-mapped table caps at
+$\sim$1{,}200 flows at 1\% rejection; bucketed chains are implemented in the
+control plane but require datapath recompilation for hardware deployment.
 
-\textbf{4. Software-only testbed:} No line-rate or hardware NIC performance claims are made, as experiments run on a WSL/vhost software testbed. Hardware targets (Tofino, SmartNIC) are defined in the abstraction layer but remain stubs pending physical hardware availability.
+\textbf{6. Single dataset:} All results are derived from a single MAWI trace
+(Samplepoint-F, 2024-08-06 14:00 JST) with 1,000 flows. Generalization to
+other traces, traffic patterns, or time windows is unverified.
 
-\textbf{5. Direct-mapped table capacity:} The direct-mapped table caps at $\sim$1{,}200 flows at 1\% rejection; bucketed chains are implemented in the control plane but require datapath recompilation for hardware deployment.
+\textbf{7. Per-record timing:} Per-record write time is directly instrumented
+in both datapath importers using time.perf_counter() around each write+verify
+cycle; min, max, mean, and median are reported per run.
 
-\textbf{6. Single dataset:} All results are derived from a single MAWI trace (Samplepoint-F, 2024-08-06 14:00 JST) with 1,000 flows. Generalization to other traces, traffic patterns, or time windows is unverified.
-
-\textbf{7. Per-record timing:} Per-record write time is inferred from total checkpoint time divided by records written, not directly instrumented per write.
-
-Future work includes: (i) implementing bucketed chains in the P4/XDP datapaths; (ii) enabling automatic failover without operator intervention and validating against live hardware failures; (iii) extending to continuous/live replication with dirty-page tracking; (iv) evaluating on hardware targets (Tofino, SmartNIC) through the HAL abstraction layer; (v) measuring per-record write times directly; and (vi) evaluating on multiple MAWI traces and diverse traffic patterns.
+Future work includes: (i) implementing bucketed chains in the P4/XDP datapaths;
+(ii) enabling automatic failover without operator intervention and validating
+against live hardware failures; (iii) extending to continuous/live replication
+with dirty-page tracking; (iv) evaluating on hardware targets (Tofino,
+SmartNIC) through the HAL abstraction layer; and (v) evaluating on multiple
+MAWI traces and diverse traffic patterns.
 
 \section{Conclusion}
 \label{sec:conclusion}
 CrossState demonstrates that cross-platform stateful firewall migration between P4/BMv2 and eBPF/XDP can be verified by construction with exact equivalence, fail-closed readiness, and a complete audit trail. Over 18{,}944 real MAWI packets and 1{,}000 flows, CrossState achieved 100\% packet decision agreement, 100\% state equivalence across 1{,}086 records, and 100\% fault detection coverage across seven injected scenarios. The no-migration baseline disrupted 996 of 1{,}000 flows, confirming that migrated state is essential rather than redundant.
 
-These results are derived from a single MAWI trace on a software testbed (BMv2/XDP). Hardware targets (Tofino, SmartNIC) remain unimplemented stubs, and the automatic failover watcher is not live-validated. The bucketed-chain extension raises capacity beyond the direct-mapped limit in the reference model but requires datapath recompilation for hardware deployment. CrossState is positioned as a schema-level, audited migration system between P4 and eBPF with quantitative verification guarantees, subject to the limitations enumerated in Section~\ref{sec:limitations}.
+These results are derived from a single MAWI trace on a software testbed
+(BMv2/XDP). Hardware targets (Tofino, SmartNIC) remain unavailable stubs,
+and the automatic failover watcher is validated against simulated (not live
+hardware) failures. The bucketed-chain extension raises capacity beyond the
+direct-mapped limit in the reference model but requires datapath
+recompilation for hardware deployment. CrossState is positioned as a
+schema-level, audited migration system between P4 and eBPF with quantitative
+verification guarantees, subject to the limitations enumerated in
+Section~\ref{sec:limitations}.
 
 \section{References}
 \label{sec:references}

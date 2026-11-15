@@ -6,6 +6,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -168,6 +169,77 @@ def read_valid_records(slots, thrift_port):
     return records
 
 
+def verify_export_consistency(
+    slots: list[int],
+    exported: list[dict],
+    thrift_port,
+    sample_size: int = 20,
+) -> dict:
+    """Re-read a sample of slots and compare to exported values to detect
+    torn snapshots caused by non-atomic register reads.
+
+    Returns a dict with consistency check results.
+    """
+    if not slots or not exported:
+        return {
+            "sampled": 0,
+            "mismatches": 0,
+            "consistent": True,
+            "message": "No slots to verify.",
+        }
+
+    # Build a lookup from exported records by slot
+    exported_by_slot = {r["slot"]: r for r in exported}
+
+    # Sample slots evenly across the range
+    sample_indices = sorted(
+        set(range(0, len(slots), max(1, len(slots) // max(1, sample_size))))
+    )[:sample_size]
+    sample_slots = [slots[i] for i in sample_indices]
+
+    # Read the sample slots again
+    requests = [
+        (name, slot)
+        for slot in sample_slots
+        for name in REGISTER_NAMES
+    ]
+    commands = [f"register_read {name} {slot}" for name, slot in requests]
+    output = run_cli(commands, thrift_port)
+    values = parse_indexed_registers(output, requests)
+
+    mismatches = []
+    for slot in sample_slots:
+        read_values = {
+            name: values[(name, slot)]
+            for name in REGISTER_NAMES
+        }
+        exported = exported_by_slot.get(slot)
+        if exported is None:
+            mismatches.append({
+                "slot": slot,
+                "reason": "slot not in exported records",
+            })
+            continue
+
+        # Compare logical fields
+        for field in ("r_st", "r_last", "r_pkts", "r_bytes"):
+            if read_values[field] != exported[field]:
+                mismatches.append({
+                    "slot": slot,
+                    "field": field,
+                    "exported": exported[field],
+                    "read_again": read_values[field],
+                })
+                break
+
+    return {
+        "sampled": len(sample_slots),
+        "mismatches": len(mismatches),
+        "consistent": len(mismatches) == 0,
+        "details": mismatches[:5],  # cap at 5 for readability
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Export BMv2 registers into a CrossState snapshot."
@@ -181,8 +253,10 @@ def main():
         return 2
 
     try:
+        t_export_start = time.perf_counter()
         slots = discover_valid_slots(args.thrift_port)
         records = read_valid_records(slots, args.thrift_port)
+        t_export_end = time.perf_counter()
 
         snapshot = build_snapshot("bmv2", records)
         serialized = serialize_snapshot(snapshot)
@@ -194,6 +268,11 @@ def main():
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(serialized, encoding="utf-8")
 
+        # Consistency check: re-read a sample of slots to detect torn snapshots
+        consistency = verify_export_consistency(
+            slots, records, args.thrift_port
+        )
+
     except Exception as exc:
         print(f"BMV2_STATE_EXPORT = FAIL\n{exc}", file=sys.stderr)
         return 1
@@ -201,9 +280,22 @@ def main():
     print("========== BMv2 STATE EXPORT ==========")
     print(f"Slots marked valid: {len(slots)}")
     print(f"Records exported: {len(records)}")
+    print(f"Export window: {(t_export_end - t_export_start)*1000:.2f}ms")
     print(f"Snapshot: {output}")
+    print(
+        f"Consistency check: {consistency['sampled']} slots sampled, "
+        f"{consistency['mismatches']} mismatches "
+        f"({'CONSISTENT' if consistency['consistent'] else 'TORN SNAPSHOT RISK'})"
+    )
+    if consistency["details"]:
+        for d in consistency["details"]:
+            print(f"  Mismatch slot {d.get('slot', '?')}: {d.get('reason', d.get('field', '?'))}")
     print("BMV2_STATE_EXPORT = PASS")
-    print("WARNING: Register reads are not an atomic snapshot.")
+    print(
+        "WARNING: BMv2 register reads are not atomic at the switch level. "
+        "A consistency check sampled a subset of slots; torn reads may still "
+        "occur in unsampled slots during active traffic."
+    )
     return 0
 
 

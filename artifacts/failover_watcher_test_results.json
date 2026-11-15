@@ -1,0 +1,30 @@
+{
+  "created_utc": "2026-11-15T12:44:06.364946+00:00",
+  "overall_pass": true,
+  "results": {
+    "failover_on_primary_failure": {
+      "status": "PASS",
+      "failover_events": 1,
+      "roles_swapped": true,
+      "breakpoint": "Failover triggered on primary failure"
+    },
+    "failback_on_primary_recovery": {
+      "status": "PASS",
+      "failover_events": 1,
+      "failback_events": 1,
+      "roles_restored": true,
+      "breakpoint": "Failback triggered on primary recovery"
+    },
+    "no_failover_when_both_unreachable": {
+      "status": "PASS",
+      "failover_events": 0,
+      "both_unreachable_logged": true,
+      "breakpoint": "No failover when both targets unreachable"
+    },
+    "health_degraded_detection": {
+      "status": "PASS",
+      "degraded_events": 2,
+      "breakpoint": "Health degraded detected before failover threshold"
+    }
+  }
+}

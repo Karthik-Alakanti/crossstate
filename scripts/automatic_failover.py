@@ -96,7 +96,7 @@ class FailoverWatcher:
             primary_target=self.state.primary,
             standby_target=self.state.standby,
             reason=reason,
-            migration_result=migration_result.to_dict(migration_result)
+            migration_result=asdict(migration_result)
             if migration_result else None,
         )
         self.state.last_event = event
@@ -134,7 +134,8 @@ class FailoverWatcher:
         self.primary, self.standby = self.standby, self.primary
         self.state.primary = self.primary.name
         self.state.standby = self.standby.name
-        self.state.primary_failed = False
+        # primary_failed remains True to indicate failover has occurred;
+        # failback will trigger when the standby (old primary) recovers.
         self.state.failover_count += 1
 
         self._record_event("failover",
@@ -182,14 +183,13 @@ class FailoverWatcher:
             f"reachable={standby_health.reachable} "
             f"failures={standby_health.consecutive_failures}")
 
-        # Primary degraded but still reachable
-        if (primary_health.reachable and
-                primary_health.consecutive_failures > 0 and
+        # Primary degraded but still has failures below threshold
+        if (primary_health.consecutive_failures > 0 and
                 primary_health.consecutive_failures < self.max_failures):
             self._record_event("health_degraded",
                                f"Primary {self.state.primary} has "
                                f"{primary_health.consecutive_failures} "
-                               f"consecutive failures but still reachable")
+                               f"consecutive failures but below failover threshold")
 
         # Primary failed: trigger failover if standby is healthy
         if (not primary_health.reachable and
@@ -206,8 +206,12 @@ class FailoverWatcher:
                 self._record_event("health_degraded",
                                    "Both primary and standby unreachable")
 
-        # Primary recovered: trigger failback if enabled
-        if (primary_health.reachable and self.state.primary_failed):
+        # Primary recovered: trigger failback if previously failed over
+        # Failback triggers when the standby (old primary) recovers and
+        # we have previously performed a failover.
+        if (standby_health.reachable and
+                self.state.primary_failed and
+                self.state.failover_count > 0):
             self._trigger_failback()
             return True
 

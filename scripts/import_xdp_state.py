@@ -6,6 +6,7 @@ import json
 import struct
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -311,6 +312,7 @@ def apply_plan(map_id, plans, previous_by_slot):
         if plan["action"] in {"insert", "replace"}
     ]
     attempted = []
+    per_record_timings = []
 
     try:
         for plan in changed:
@@ -318,9 +320,23 @@ def apply_plan(map_id, plans, previous_by_slot):
             wanted = plan["record"]
             attempted.append(slot)
 
+            t0 = time.perf_counter()
             update_raw_slot(map_id, slot, encode_record(wanted))
+            t1 = time.perf_counter()
+
             actual_raw = read_raw_slot(map_id, slot)
+            t2 = time.perf_counter()
             actual = decode_current_record(slot, actual_raw)
+
+            write_seconds = t1 - t0
+            verify_seconds = t2 - t1
+            total_seconds = t2 - t0
+            per_record_timings.append({
+                "slot": slot,
+                "write_seconds": write_seconds,
+                "verify_seconds": verify_seconds,
+                "total_seconds": total_seconds,
+            })
 
             if not matches(actual, wanted):
                 raise RuntimeError(
@@ -346,6 +362,36 @@ def apply_plan(map_id, plans, previous_by_slot):
         if rollback_errors:
             message += "\nROLLBACK ERRORS:\n" + "\n".join(rollback_errors)
         raise RuntimeError(message) from exc
+
+    # Print per-record timing summary
+    if per_record_timings:
+        write_times = [t["write_seconds"] for t in per_record_timings]
+        verify_times = [t["verify_seconds"] for t in per_record_timings]
+        total_times = [t["total_seconds"] for t in per_record_timings]
+
+        def stats(times):
+            if not times:
+                return (0.0, 0.0, 0.0, 0.0)
+            sorted_times = sorted(times)
+            n = len(sorted_times)
+            return (
+                sorted_times[0],           # min
+                sorted_times[-1],          # max
+                sum(times) / n,            # mean
+                sorted_times[n // 2],      # median
+            )
+
+        w_min, w_max, w_mean, w_median = stats(write_times)
+        v_min, v_max, v_mean, v_median = stats(verify_times)
+        t_min, t_max, t_mean, t_median = stats(total_times)
+
+        print(f"Per-record timing (n={len(per_record_timings)}):")
+        print(f"  Write:     min={w_min*1000:.2f}ms max={w_max*1000:.2f}ms "
+              f"mean={w_mean*1000:.2f}ms median={w_median*1000:.2f}ms")
+        print(f"  Verify:    min={v_min*1000:.2f}ms max={v_max*1000:.2f}ms "
+              f"mean={v_mean*1000:.2f}ms median={v_median*1000:.2f}ms")
+        print(f"  Total:     min={t_min*1000:.2f}ms max={t_max*1000:.2f}ms "
+              f"mean={t_mean*1000:.2f}ms median={t_median*1000:.2f}ms")
 
     return len(changed)
 
