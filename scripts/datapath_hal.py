@@ -264,7 +264,7 @@ class XdpTarget(DatapathTarget):
     def __init__(self, name: str = "xdp", map_name: str = "flow_state"):
         super().__init__(name, "eBPF/XDP (software)")
         self.map_name = map_name
-        self._map_id: int | None = None
+        self._map_id_cache: int | None = None
 
     def _run_json(self, args: list[str]) -> Any:
         result = subprocess.run(args, capture_output=True, text=True, check=False)
@@ -275,13 +275,13 @@ class XdpTarget(DatapathTarget):
         return json.loads(result.stdout)
 
     def _map_id(self) -> int:
-        if self._map_id is None:
+        if self._map_id_cache is None:
             maps = self._run_json(["bpftool", "-j", "map", "show"])
             matches = [m for m in maps if m.get("name") == self.map_name]
             if len(matches) != 1:
                 raise RuntimeError(f"Expected one {self.map_name} map, found {len(matches)}.")
-            self._map_id = matches[0]["id"]
-        return self._map_id
+            self._map_id_cache = matches[0]["id"]
+        return self._map_id_cache
 
     def _encode(self, record: DatapathRecord) -> bytes:
         raw = bytearray(RECORD_BYTES)
