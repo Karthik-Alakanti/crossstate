@@ -101,6 +101,15 @@ class MockTarget(DatapathTarget):
     def is_available(self) -> bool:
         return self._healthy
 
+    def get_dirty_slots(self) -> list[int]:
+        return []
+
+    def mark_clean(self, slot: int) -> None:
+        pass
+
+    def get_dirty_count(self) -> int:
+        return 0
+
 
 def test_failover_on_primary_failure() -> dict:
     """Test 1: Primary becomes unreachable -> failover to standby triggered."""

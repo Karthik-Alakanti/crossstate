@@ -26,6 +26,7 @@ REGISTER_NAMES = [
     "r_pkts",
     "r_bytes",
     "r_synced",
+    "r_dirty",
 ]
 LOGICAL_FIELDS = ("st", "last", "pkts", "bytes")
 DEFAULT_SNAPSHOT = ROOT / "artifacts/state/xdp_snapshot.json"
@@ -100,12 +101,13 @@ def read_slots(slots, thrift_port):
             "pkts": fields["r_pkts"],
             "bytes": fields["r_bytes"],
             "synced": fields["r_synced"],
+            "dirty": fields["r_dirty"],
         }
 
     return result
 
 
-def plan_import(snapshot, existing_by_slot, replace_same_key=False):
+def plan_import(snapshot, existing_by_slot, replace_same_key=False, dirty_only=False):
     """Create a complete import plan; no destination writes occur here."""
     plans = []
     errors = []
@@ -113,6 +115,16 @@ def plan_import(snapshot, existing_by_slot, replace_same_key=False):
     for wanted in snapshot["records"]:
         slot = wanted["slot"]
         current = existing_by_slot.get(slot)
+
+        # Delta mode: skip records that haven't changed (dirty=0)
+        if dirty_only and not wanted.get("dirty", 0):
+            plans.append({
+                "action": "noop",
+                "slot": slot,
+                "record": wanted,
+                "reason": "clean_record_skipped",
+            })
+            continue
 
         if current is None:
             plans.append({
@@ -348,6 +360,11 @@ def main():
         help="Permit replacing existing state for the same flow key.",
     )
     parser.add_argument(
+        "--delta",
+        action="store_true",
+        help="Delta migration: only import records that are dirty (changed since last checkpoint).",
+    )
+    parser.add_argument(
         "--apply",
         action="store_true",
         help="Perform writes. Without this flag the command is dry-run only.",
@@ -381,6 +398,7 @@ def main():
             snapshot,
             previous,
             replace_same_key=args.replace_same_key,
+            dirty_only=args.delta,
         )
 
     except Exception as exc:
@@ -392,11 +410,15 @@ def main():
         counts[plan["action"]] = counts.get(plan["action"], 0) + 1
 
     mode = "APPLY" if args.apply else "DRY RUN"
-    print(f"========== BMv2 STATE IMPORT: {mode} ==========")
+    delta_str = " (delta mode)" if args.delta else ""
+    print(f"========== BMv2 STATE IMPORT: {mode}{delta_str} ==========")
     print(f"Snapshot source: {snapshot['source_target']}")
     print(f"Records inspected: {len(snapshot['records'])}")
     for action in sorted(counts):
         print(f"{action}: {counts[action]}")
+    if args.delta:
+        dirty_count = sum(1 for r in snapshot["records"] if r.get("dirty", 0))
+        print(f"Dirty records: {dirty_count}")
 
     if planning_errors:
         print(f"Preflight errors: {len(planning_errors)}")

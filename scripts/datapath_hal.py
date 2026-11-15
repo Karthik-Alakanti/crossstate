@@ -60,6 +60,7 @@ class DatapathRecord:
     chain_index: int = 0
     synced: int = 0
     valid: int = 1
+    dirty: int = 0  # Dirty-page tracking: 1 if record changed since last checkpoint
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -72,6 +73,7 @@ class DatapathRecord:
             "chain_index": self.chain_index,
             "synced": self.synced,
             "valid": self.valid,
+            "dirty": self.dirty,
         }
 
     def matches(self, other: "DatapathRecord") -> bool:
@@ -125,6 +127,18 @@ class DatapathTarget(abc.ABC):
     @abc.abstractmethod
     def is_hardware(self) -> bool:
         """True if this is a hardware target (Tofino/SmartNIC)."""
+
+    @abc.abstractmethod
+    def get_dirty_slots(self) -> list[int]:
+        """Return slots that have been modified since last checkpoint (dirty-page tracking)."""
+
+    @abc.abstractmethod
+    def mark_clean(self, slot: int) -> None:
+        """Mark a slot as clean after successful checkpoint."""
+
+    @abc.abstractmethod
+    def get_dirty_count(self) -> int:
+        """Return the number of dirty slots."""
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +201,7 @@ class Bmv2Target(DatapathTarget):
         if not slots:
             return []
         names = ["r_valid", "r_ipa", "r_pa", "r_ipb", "r_pb", "r_st",
-                 "r_last", "r_pkts", "r_bytes", "r_synced"]
+                 "r_last", "r_pkts", "r_bytes", "r_synced", "r_dirty"]
         requests = [(n, s) for s in slots for n in names]
         commands = [f"register_read {n} {s}" for n, s in requests]
         output = self._cli(commands)
@@ -206,6 +220,7 @@ class Bmv2Target(DatapathTarget):
                 bytes=fields["r_bytes"],
                 chain_index=0,
                 synced=fields["r_synced"],
+                dirty=fields["r_dirty"],
             ))
         return records
 
@@ -266,6 +281,25 @@ class Bmv2Target(DatapathTarget):
     def is_hardware(self) -> bool:
         return False
 
+    def get_dirty_slots(self) -> list[int]:
+        """Return slots that have been modified since last checkpoint (dirty-page tracking)."""
+        output = self._cli(["register_read r_dirty"])
+        import re
+        pattern = r"r_dirty\s*=\s*(.*?)(?=\nRuntimeCmd:|\Z)"
+        match = re.search(pattern, output, flags=re.DOTALL)
+        if not match:
+            return []
+        valid = [int(t.strip()) for t in match.group(1).strip().split(",")]
+        return [s for s, f in enumerate(valid) if f == 1]
+
+    def mark_clean(self, slot: int) -> None:
+        """Mark a slot as clean after successful checkpoint."""
+        self._cli([f"register_write r_dirty {slot} 0"])
+
+    def get_dirty_count(self) -> int:
+        """Return the number of dirty slots."""
+        return len(self.get_dirty_slots())
+
 
 class XdpTarget(DatapathTarget):
     """eBPF/XDP via bpftool map interface."""
@@ -274,6 +308,7 @@ class XdpTarget(DatapathTarget):
         super().__init__(name, "eBPF/XDP (software)")
         self.map_name = map_name
         self._map_id_cache: int | None = None
+        self._dirty_slots: set[int] = set()
 
     def _run_json(self, args: list[str]) -> Any:
         result = subprocess.run(args, capture_output=True, text=True, check=False)
@@ -327,8 +362,6 @@ class XdpTarget(DatapathTarget):
             pkts=int.from_bytes(raw[24:32], "little"),
             bytes=int.from_bytes(raw[32:40], "little"),
         )
-
-    def _parse_bpftool_value(self, val: Any) -> bytes:
         """Parse a bpftool JSON value that may be dict, str, list of hex strings, or list of ints."""
         if isinstance(val, dict):
             return bytes.fromhex(val.get("value", "").replace(":", ""))
@@ -379,6 +412,7 @@ class XdpTarget(DatapathTarget):
         result = subprocess.run(args, capture_output=True, text=True, check=False)
         if result.returncode != 0:
             raise RuntimeError(f"Map update failed at slot {record.slot}: {result.stderr.strip()}")
+        self._dirty_slots.add(record.slot)
         if verify:
             actual = self.read_slot(record.slot)
             if actual is None or not actual.matches(record):
@@ -397,6 +431,7 @@ class XdpTarget(DatapathTarget):
             "any",
         ]
         subprocess.run(args, capture_output=True, text=True, check=False)
+        self._dirty_slots.add(slot)
 
     def health_check(self) -> DatapathHealth:
         t0 = datetime.now(timezone.utc)
@@ -425,6 +460,18 @@ class XdpTarget(DatapathTarget):
 
     def is_hardware(self) -> bool:
         return False
+
+    def get_dirty_slots(self) -> list[int]:
+        """Return slots that have been modified since last checkpoint (dirty-page tracking)."""
+        return sorted(list(self._dirty_slots))
+
+    def mark_clean(self, slot: int) -> None:
+        """Mark a slot as clean after successful checkpoint."""
+        self._dirty_slots.discard(slot)
+
+    def get_dirty_count(self) -> int:
+        """Return the number of dirty slots."""
+        return len(self._dirty_slots)
 
 
 # ---------------------------------------------------------------------------
@@ -511,6 +558,24 @@ class TofinoTarget(DatapathTarget):
                 error=str(exc), consecutive_failures=self.consecutive_failures,
             )
 
+    def is_hardware(self) -> bool:
+        return True
+
+    def get_dirty_slots(self) -> list[int]:
+        """Return slots that have been modified since last checkpoint (dirty-page tracking)."""
+        self._ensure_client()
+        raise HardwareUnavailableError("Tofino get_dirty_slots requires physical hardware.")
+
+    def mark_clean(self, slot: int) -> None:
+        """Mark a slot as clean after successful checkpoint."""
+        self._ensure_client()
+        raise HardwareUnavailableError("Tofino mark_clean requires physical hardware.")
+
+    def get_dirty_count(self) -> int:
+        """Return the number of dirty slots."""
+        self._ensure_client()
+        raise HardwareUnavailableError("Tofino get_dirty_count requires physical hardware.")
+
 
 class SmartNicTarget(DatapathTarget):
     """eBPF SmartNIC via libbpf / netlink (hardware target - unavailable).
@@ -592,6 +657,24 @@ class SmartNicTarget(DatapathTarget):
                 last_check_utc=t0.isoformat(),
                 error=str(exc), consecutive_failures=self.consecutive_failures,
             )
+
+    def is_hardware(self) -> bool:
+        return True
+
+    def get_dirty_slots(self) -> list[int]:
+        """Return slots that have been modified since last checkpoint (dirty-page tracking)."""
+        self._ensure_libbpf()
+        raise HardwareUnavailableError("SmartNIC get_dirty_slots requires physical hardware.")
+
+    def mark_clean(self, slot: int) -> None:
+        """Mark a slot as clean after successful checkpoint."""
+        self._ensure_libbpf()
+        raise HardwareUnavailableError("SmartNIC mark_clean requires physical hardware.")
+
+    def get_dirty_count(self) -> int:
+        """Return the number of dirty slots."""
+        self._ensure_libbpf()
+        raise HardwareUnavailableError("SmartNIC get_dirty_count requires physical hardware.")
 
 
 # ---------------------------------------------------------------------------
