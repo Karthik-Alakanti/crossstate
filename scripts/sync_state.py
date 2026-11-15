@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -202,6 +203,14 @@ def main():
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     prefix = STATE_DIR / f"sync_{args.direction}_{stamp}"
 
+    phase_seconds: dict[str, float] = {}
+
+    def timed(label, fn):
+        t0 = time.perf_counter()
+        result = fn()
+        phase_seconds[label] = time.perf_counter() - t0
+        return result
+
     source_path = Path(f"{prefix}_source.json")
     source_after_path = Path(f"{prefix}_source_after.json")
     source_stability_report = Path(f"{prefix}_source_stability.json")
@@ -219,11 +228,13 @@ def main():
     print("Mode:", "APPLY" if args.apply else "DRY RUN")
     print("Traffic quiesced acknowledgement:", args.traffic_quiesced)
 
-    source_snapshot = export_state(
-        source, source_path, args.thrift_port
+    source_snapshot = timed(
+        "export_source",
+        lambda: export_state(source, source_path, args.thrift_port),
     )
-    destination_snapshot = export_state(
-        destination, before_path, args.thrift_port
+    destination_snapshot = timed(
+        "export_destination",
+        lambda: export_state(destination, before_path, args.thrift_port),
     )
 
     source_slots = {r["slot"] for r in source_snapshot["records"]}
@@ -231,7 +242,10 @@ def main():
         r["slot"] for r in destination_snapshot["records"]
     }
 
-    pre = compare(source_path, before_path, pre_report)
+    pre = timed(
+        "compare_preflight",
+        lambda: compare(source_path, before_path, pre_report),
+    )
 
     # Refuse automatic deletion of destination-only records and
     # same-slot key conflicts.
@@ -243,8 +257,11 @@ def main():
     print("Destination-only slots:", len(destination_only))
 
     # Preview first, including all importer collision checks.
-    import_state(
-        source, destination, source_path, False, args.thrift_port
+    timed(
+        "plan_dry_run_import",
+        lambda: import_state(
+            source, destination, source_path, False, args.thrift_port
+        ),
     )
 
     if not args.apply:
@@ -256,15 +273,22 @@ def main():
     affected_slots = sorted(source_slots | destination_slots)
 
     try:
-        import_state(
-            source, destination, source_path, True, args.thrift_port
+        timed(
+            "apply_import",
+            lambda: import_state(
+                source, destination, source_path, True, args.thrift_port
+            ),
         )
 
         # Export and compare before declaring anything synchronized.
-        after_snapshot = export_state(
-            destination, after_path, args.thrift_port
+        after_snapshot = timed(
+            "export_after",
+            lambda: export_state(destination, after_path, args.thrift_port),
         )
-        verified = compare(source_path, after_path, post_report)
+        verified = timed(
+            "verify_compare",
+            lambda: compare(source_path, after_path, post_report),
+        )
 
         if not verified.get("equivalent", False):
             raise RuntimeError(
@@ -277,26 +301,36 @@ def main():
 
         # Detect source changes during the import before declaring the
         # destination synchronized. Traffic must remain quiesced.
-        verify_source_stability(
-            source,
-            source_path,
-            source_after_path,
-            source_stability_report,
-            args.thrift_port,
+        timed(
+            "stability_re_export",
+            lambda: verify_source_stability(
+                source,
+                source_path,
+                source_after_path,
+                source_stability_report,
+                args.thrift_port,
+            ),
         )
         print("\\nAuthoritative source stability: PASS")
 
         # Mark readiness only after exact logical equivalence.
-        set_ready(
-            destination, sorted(source_slots), True, args.thrift_port
+        timed(
+            "mark_readiness",
+            lambda: set_ready(
+                destination, sorted(source_slots), True, args.thrift_port
+            ),
         )
 
         # Export once more to confirm readiness marking did not alter
         # logical state.
-        final_snapshot = export_state(
-            destination, final_path, args.thrift_port
+        final_snapshot = timed(
+            "final_export",
+            lambda: export_state(destination, final_path, args.thrift_port),
         )
-        final = compare(source_path, final_path, final_report)
+        final = timed(
+            "final_compare",
+            lambda: compare(source_path, final_path, final_report),
+        )
 
         if not final.get("equivalent", False):
             raise RuntimeError(
@@ -338,6 +372,7 @@ def main():
             "source_stable": True,
             "destination_snapshot": str(final_path),
             "comparison": str(final_report),
+            "phase_seconds": phase_seconds,
             "created_utc": stamp,
         }
         audit_path = Path(f"{prefix}_audit.json")

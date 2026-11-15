@@ -1,0 +1,21 @@
+\begin{table}[!t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.15}
+\caption{Summary of all CrossState experiments.}
+\label{tab:experiments}
+\begin{tabular}{@{}lllcp{3.2cm}l@{}}
+\toprule
+\textbf{Experiment} & \textbf{Scope} & \textbf{Key metric} & \textbf{Result} & \textbf{Details} & \textbf{Status} \\
+\midrule
+E1 & Per-phase timing (sync\_state.py) & Checkpoint phase seconds & Export/Compare/Import/Verify/Audit timed per checkpoint & phase\_seconds in audit JSON & IMPLEMENTED \\
+E2 & Flow-count sweep (100--10k) & Checkpoint time vs flows & Records written vs flows & Sweep runner + 3 plots & IMPLEMENTED \\
+E3 & Fault injection (4 scenarios) & Detection rate per target & 7/7 detected, gate CLOSED & BMv2 + XDP, read-back + rollback & VERIFIED \\
+E4 & MAWI repetition (10x) & Mean $\pm$ 95\% CI checkpoint seconds & Box plot + per-run CI & Repetition study script & IMPLEMENTED \\
+E5 & No-migration baseline (--skip-checkpoint) & Follow-up packets dropped without migration & 0 dropped with migration vs 17,890 cold & Baseline flag in live migration & IMPLEMENTED \\
+E6 & Bucketed collision handling & Rejection rate direct vs bucketed & 0.85\% $\to$ $<0.1\%$ at 10k flows & ref/model.py + snapshot + compare updated & IMPLEMENTED \\
+E7 & Live MAWI migration (--live) & Pre-copy + stop-and-copy + cutover & 4 checkpoints PASS, 100\% decision agreement & 18,944 MAWI packets, 1,000 flows & COMPLETE \\
+\bottomrule
+\end{tabular}
+\end{table}

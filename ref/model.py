@@ -8,6 +8,7 @@ ALLOW, DROP = 1, 0
 
 N = 1 << 16
 T = 30_000_000
+BUCKET_CHAIN_SIZE = 4
 
 
 @dataclass(frozen=True)
@@ -60,52 +61,78 @@ def slot_of(key, n=N):
 def step(tbl, e, n=N, t=T):
     key = canon(e)
     s = slot_of(key, n)
-    rec = tbl.get(s)
+    chain = tbl.get(s, [])
+
+    # Find matching key within the bucket chain.
+    rec = None
+    for k, st, last, pk, by in chain:
+        if k == key:
+            rec = (k, st, last, pk, by)
+            break
 
     live = rec is not None and (e.ts - rec[2]) <= t
 
     init = e.inside and e.syn and not e.ack
 
-    # Empty or expired
+    # Empty or expired (no live match in the chain).
     if not live:
         if init:
-            tbl[s] = (key, NEW, e.ts, 1, e.length)
-            return ALLOW
+            if len(chain) < BUCKET_CHAIN_SIZE:
+                chain.append((key, NEW, e.ts, 1, e.length))
+                tbl[s] = chain
+                return ALLOW
+            return DROP  # bucket chain full
         return DROP
 
     k, st, last, pk, by = rec
 
-    # Live hash collision
-    if k != key:
-        return DROP
-
-    # Closed flow
+    # Closed flow.
     if st == CLOSED:
         if init:
-            tbl[s] = (key, NEW, e.ts, 1, e.length)
+            chain = [
+                (key, NEW, e.ts, 1, e.length) if k2 == k else (k2, st2, l2, p2, b2)
+                for k2, st2, l2, p2, b2 in chain
+            ]
+            tbl[s] = chain
             return ALLOW
         return DROP
 
     npk = (pk + 1) & M64
     nby = (by + e.length) & M64
 
-    # Connection termination
+    # Connection termination.
     if e.rst or e.fin:
-        tbl[s] = (k, CLOSED, e.ts, npk, nby)
+        chain = [
+            (k, CLOSED, e.ts, npk, nby) if k2 == k else (k2, st2, l2, p2, b2)
+            for k2, st2, l2, p2, b2 in chain
+        ]
+        tbl[s] = chain
         return ALLOW
 
-    # NEW
+    # NEW.
     if st == NEW:
         if e.inside:
-            tbl[s] = (k, NEW, e.ts, npk, nby)
+            chain = [
+                (k, NEW, e.ts, npk, nby) if k2 == k else (k2, st2, l2, p2, b2)
+                for k2, st2, l2, p2, b2 in chain
+            ]
+            tbl[s] = chain
             return ALLOW
 
         if e.syn and e.ack:
-            tbl[s] = (k, EST, e.ts, npk, nby)
+            chain = [
+                (k, EST, e.ts, npk, nby) if k2 == k else (k2, st2, l2, p2, b2)
+                for k2, st2, l2, p2, b2 in chain
+            ]
+            tbl[s] = chain
             return ALLOW
 
         return DROP
 
-    # EST
-    tbl[s] = (k, EST, e.ts, npk, nby)
+    # EST.
+    chain = [
+        (k, EST, e.ts, npk, nby) if k2 == k else (k2, st2, l2, p2, b2)
+        for k2, st2, l2, p2, b2 in chain
+    ]
+    tbl[s] = chain
     return ALLOW

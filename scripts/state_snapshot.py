@@ -9,13 +9,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from ref.model import key_bytes, slot_of
+from ref.model import key_bytes, slot_of, BUCKET_CHAIN_SIZE
 
 FORMAT = "crossstate-state-snapshot"
 SCHEMA_VERSION = 1
 SPEC_NAME = "tcp_firewall"
 SPEC_VERSION = 1
 SLOT_COUNT = 65536
+BUCKET_CHAIN_SIZE = 4
 
 U8_MAX = (1 << 8) - 1
 U16_MAX = (1 << 16) - 1
@@ -36,7 +37,7 @@ SNAPSHOT_FIELDS = {
     "records",
 }
 
-RECORD_FIELDS = {"slot", "key", "st", "last", "pkts", "bytes"}
+RECORD_FIELDS = {"slot", "key", "st", "last", "pkts", "bytes", "chain_index"}
 
 
 def _is_uint(value, maximum):
@@ -89,7 +90,7 @@ def validate_snapshot(snapshot):
         fail("records must be a JSON array.")
         return errors
 
-    seen_slots = set()
+    seen_slot_chain = set()
     seen_keys = set()
 
     for i, rec in enumerate(records):
@@ -109,10 +110,15 @@ def validate_snapshot(snapshot):
             continue
 
         slot = rec["slot"]
+        chain_index = rec["chain_index"]
         key = rec["key"]
 
         if not _is_uint(slot, SLOT_COUNT - 1):
             fail(f"{prefix}.slot must be in [0, {SLOT_COUNT - 1}].")
+            continue
+
+        if not _is_uint(chain_index, BUCKET_CHAIN_SIZE - 1):
+            fail(f"{prefix}.chain_index must be in [0, {BUCKET_CHAIN_SIZE - 1}].")
             continue
 
         if not isinstance(key, list) or len(key) != 5:
@@ -162,9 +168,10 @@ def validate_snapshot(snapshot):
                 f"calculated {expected_slot}."
             )
 
-        if slot in seen_slots:
-            fail(f"{prefix}.slot duplicates slot {slot}.")
-        seen_slots.add(slot)
+        slot_chain = (slot, chain_index)
+        if slot_chain in seen_slot_chain:
+            fail(f"{prefix}.slot {slot} chain_index {chain_index} already used.")
+        seen_slot_chain.add(slot_chain)
 
         if key_tuple in seen_keys:
             fail(f"{prefix}.key duplicates another record.")
@@ -190,19 +197,29 @@ def build_snapshot(source_target, records):
     if source_target not in VALID_TARGETS:
         raise ValueError(f"Unsupported source target: {source_target!r}")
 
-    snapshot_records = []
-
+    # Group records by bucket (slot) and assign chain_index within each bucket.
+    by_bucket: dict[int, list] = {}
     for record in records:
-        snapshot_records.append({
-            "slot": record["slot"],
-            "key": list(record["key"]),
-            "st": record["st"],
-            "last": record["last"],
-            "pkts": record["pkts"],
-            "bytes": record["bytes"],
-        })
+        bucket = record["slot"]
+        by_bucket.setdefault(bucket, []).append(record)
 
-    snapshot_records.sort(key=lambda rec: rec["slot"])
+    snapshot_records = []
+    for bucket in sorted(by_bucket):
+        chain = by_bucket[bucket]
+        for chain_index, record in enumerate(chain):
+            if chain_index >= BUCKET_CHAIN_SIZE:
+                raise ValueError(
+                    f"Bucket {bucket} exceeds chain size {BUCKET_CHAIN_SIZE}."
+                )
+            snapshot_records.append({
+                "slot": bucket,
+                "key": list(record["key"]),
+                "st": record["st"],
+                "last": record["last"],
+                "pkts": record["pkts"],
+                "bytes": record["bytes"],
+                "chain_index": chain_index,
+            })
 
     snapshot = {
         "format": FORMAT,

@@ -162,6 +162,7 @@ def decode_map_entry(entry):
 
     return {
         "slot": slot,
+        "chain_index": 0,
         **decoded,
     }
 

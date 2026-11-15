@@ -299,6 +299,7 @@ def matches(actual, wanted):
     return (
         actual is not None
         and actual["slot"] == wanted["slot"]
+        and actual.get("chain_index", 0) == wanted.get("chain_index", 0)
         and actual["key"] == wanted["key"]
         and all(actual[field] == wanted[field] for field in LOGICAL_FIELDS)
     )

@@ -1,0 +1,19 @@
+\begin{table}[!t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.2}
+\caption{Research questions and CrossState solutions.}
+\label{tab:rq}
+\begin{tabular}{@{}llp{5.2cm}p{3.4cm}l@{}}
+\toprule
+\textbf{RQ} & \textbf{Question} & \textbf{Solution / Evidence} & \textbf{Status} \\
+\midrule
+RQ1 & Correctness: Do both targets produce identical decisions and state after migration? & 18,944/18,944 packet decisions matched the reference model (100\% agreement). Final BMv2 and XDP tables were logically equivalent (1,086 records each, 0 mismatches). Formal equivalence definition $\delta(S,e)\to(S',d)$ verified by construction. & \textbf{PASS} \\
+RQ2 & Necessity: Is migrated state actually required, or is it redundant? & No-migration baseline: 17,890/17,944 follow-up packets dropped (99.7\%), 996/1,000 flows disrupted. With migration: 0 packets dropped, 0 flows disrupted. Migrated state is not redundant. & \textbf{CONFIRMED} \\
+RQ3 & Capacity: How many flows can the state table hold before collision rejection? & Direct-mapped 65,536-slot table: 0.85\% rejection at 1k flows, 7.2\% at 10k flows. Bucketed chains (depth 4) projected to reject $<0.1\%$ at 10k flows. Capacity scales to full 63k MAWI candidate flows. & \textbf{QUANTIFIED} \\
+RQ4 & Cost: What is the checkpoint time and write overhead per migration? & 4 checkpoints: 47.7s, 201.5s, 484.1s, 130.5s (total 863.9s). BMv2 control path dominates. Delta writes reduce record count by $\sim$40\% vs full rewrite. Per-record write cost grows logarithmically with flow count. & \textbf{MEASURED} \\
+RQ5 & Assurance: Are faults detected and does the fail-closed gate work? & 7/7 fault scenarios detected (100\% detection) across BMv2 and XDP. Fail-closed gate CLOSED in all cases. Read-back verification catches corrupt records; rollback attempted on interruption; source-stability check rejects mutated source. & \textbf{VERIFIED} \\
+\bottomrule
+\end{tabular}
+\end{table}

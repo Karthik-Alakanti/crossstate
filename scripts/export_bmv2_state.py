@@ -162,6 +162,7 @@ def read_valid_records(slots, thrift_port):
             "last": read_values["r_last"],
             "pkts": read_values["r_pkts"],
             "bytes": read_values["r_bytes"],
+            "chain_index": 0,
         })
 
     return records

@@ -42,6 +42,41 @@ def test_handshake_and_expiry():
     assert step(t, ev(True, 5 + T + 2, syn=True)) == ALLOW
 
 
+def test_bucket_chain_rejects_overflow():
+    """More flows than BUCKET_CHAIN_SIZE hashing to same bucket are rejected."""
+    t = {}
+
+    base_ip = 0x0A000001
+    # Find 5 distinct canonical keys that hash to the same slot.
+    target_slot = None
+    keys = []
+    candidate = 1
+    while len(keys) < BUCKET_CHAIN_SIZE + 1 and candidate < 0xFFFFFFFF:
+        key = (candidate, 40000, candidate + 1, 40001, 6)
+        s = slot_of(key)
+        if target_slot is None:
+            target_slot = s
+        if s == target_slot:
+            keys.append(key)
+        candidate += 1
+
+    if len(keys) < BUCKET_CHAIN_SIZE + 1:
+        raise AssertionError("Could not find enough CRC bucket collisions.")
+
+    ts = 1_000_000
+    for i, key in enumerate(keys):
+        e = Ev(
+            key[0], key[1], key[2], key[3], 6,
+            True, True, False, False, False,
+            100, ts + i,
+        )
+        r = step(t, e)
+        if i < BUCKET_CHAIN_SIZE:
+            assert r == ALLOW, f"Chain insert {i} should be ALLOW"
+        else:
+            assert r == DROP, f"Chain overflow at {i} should be DROP"
+
+
 @given(
     st.lists(
         st.tuples(

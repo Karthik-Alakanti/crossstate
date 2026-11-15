@@ -38,7 +38,7 @@ def test_identical_snapshots_are_equivalent():
 
     assert report["equivalent"]
     assert len(report["exact_matches"]) == 1
-    assert not report["slot_conflicts"]
+    assert not report["bucket_conflicts"]
 
 
 def test_counter_difference_is_detected():
@@ -88,5 +88,5 @@ def test_same_slot_different_keys_are_conflicts():
     report = compare_snapshots(left, right)
 
     assert not report["equivalent"]
-    assert len(report["slot_conflicts"]) == 1
-    assert report["slot_conflicts"][0]["slot"] == target_slot
+    assert len(report["bucket_conflicts"]) == 1
+    assert report["bucket_conflicts"][0]["slot"] == target_slot

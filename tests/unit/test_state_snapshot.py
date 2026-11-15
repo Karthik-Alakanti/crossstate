@@ -63,6 +63,7 @@ def test_builder_sorts_records_by_slot():
 def test_rejects_wrong_slot():
     item = record()
     item["slot"] = (item["slot"] + 1) % SLOT_COUNT
+    item["chain_index"] = 0
 
     errors = validate_snapshot({
         "format": FORMAT,
@@ -82,6 +83,7 @@ def test_rejects_noncanonical_key():
         KEY[2], KEY[3], KEY[0], KEY[1], KEY[4]
     ]
     item = record(reversed_key)
+    item["chain_index"] = 0
 
     malformed = {
         "format": FORMAT,
@@ -125,6 +127,23 @@ def test_rejects_invalid_state_and_numeric_widths():
 
 def test_rejects_duplicate_slots_and_keys():
     item = record()
+
+    # Find a different key that hashes to the same slot as item.
+    target_slot = item["slot"]
+    key2 = None
+    for port in range(1024, 65536):
+        candidate = [167772161, port, 167772162, 443, 6]
+        if slot_of(tuple(candidate), SLOT_COUNT) == target_slot:
+            key2 = candidate
+            break
+
+    assert key2 is not None, "Could not find colliding key for test."
+
+    item2 = record(key2)
+
+    # build_snapshot auto-assigns chain_index 0 and 1. Both have same key? No,
+    # different keys. To test same (slot, chain_index) rejection, construct
+    # the snapshot dict directly bypassing build_snapshot's auto-assignment.
     malformed = {
         "format": FORMAT,
         "schema_version": 1,
@@ -132,13 +151,44 @@ def test_rejects_duplicate_slots_and_keys():
         "spec_version": 1,
         "slots": SLOT_COUNT,
         "source_target": "xdp",
-        "records": [item, copy.deepcopy(item)],
+        "records": [
+            {**item, "chain_index": 0},
+            {**item2, "slot": target_slot, "chain_index": 0},
+        ],
     }
 
     errors = validate_snapshot(malformed)
 
-    assert any("duplicates slot" in error for error in errors)
-    assert any("duplicates another record" in error for error in errors)
+    assert any("chain_index" in error and "already used" in error for error in errors)
+
+
+def test_allows_duplicate_slots_with_different_chain_index():
+    """Bucketed chains: multiple records per slot with different chain_index."""
+    item = record()
+    item["chain_index"] = 0
+
+    # Find a different key that hashes to the same slot as item.
+    target_slot = item["slot"]
+    key2 = None
+    for port in range(1024, 65536):
+        candidate = [167772161, port, 167772162, 443, 6]
+        if slot_of(tuple(candidate), SLOT_COUNT) == target_slot:
+            key2 = candidate
+            break
+
+    assert key2 is not None, "Could not find colliding key for test."
+
+    item2 = record(key2)
+    # build_snapshot auto-assigns chain_index 0 and 1 within the bucket.
+
+    snapshot_result = snapshot(item, item2)
+
+    assert len(snapshot_result["records"]) == 2
+    chain = [r for r in snapshot_result["records"] if r["slot"] == target_slot]
+    assert len(chain) == 2
+    ci_values = sorted(r["chain_index"] for r in chain)
+    assert ci_values == [0, 1]
+    assert validate_snapshot(snapshot_result) == []
 
 
 def test_rejects_unknown_schema_version():

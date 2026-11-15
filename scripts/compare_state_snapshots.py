@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare two validated CrossState snapshots by slot and logical record."""
+"""Compare two validated CrossState snapshots by bucket and logical record."""
 
 import argparse
 import json
@@ -24,63 +24,93 @@ def load_snapshot(path):
     return snapshot
 
 
-def compare_snapshots(left, right):
-    left_by_slot = {record["slot"]: record for record in left["records"]}
-    right_by_slot = {record["slot"]: record for record in right["records"]}
+def _bucket_index(records):
+    """Group records by bucket (slot) -> list of records."""
+    buckets: dict[int, list[dict]] = {}
+    for rec in records:
+        buckets.setdefault(rec["slot"], []).append(rec)
+    return buckets
 
-    left_slots = set(left_by_slot)
-    right_slots = set(right_by_slot)
+
+def _records_by_key(bucket_records):
+    """Within a bucket, index records by key tuple."""
+    return {tuple(r["key"]): r for r in bucket_records}
+
+
+def compare_snapshots(left, right):
+    left_buckets = _bucket_index(left["records"])
+    right_buckets = _bucket_index(right["records"])
+
+    left_slots = set(left_buckets)
+    right_slots = set(right_buckets)
 
     exact_matches = []
     differing_records = []
-    slot_conflicts = []
+    bucket_conflicts = []
+    bucket_chain_overflow = []
 
+    # Buckets present on both sides: compare records by key within each bucket.
     for slot in sorted(left_slots & right_slots):
-        a = left_by_slot[slot]
-        b = right_by_slot[slot]
+        left_by_key = _records_by_key(left_buckets[slot])
+        right_by_key = _records_by_key(right_buckets[slot])
 
-        if a["key"] != b["key"]:
-            slot_conflicts.append({
+        left_keys = set(left_by_key)
+        right_keys = set(right_by_key)
+
+        # Same bucket, different key sets -> conflict (chain overflow or split).
+        if left_keys != right_keys:
+            bucket_conflicts.append({
                 "slot": slot,
-                "left_key": a["key"],
-                "right_key": b["key"],
+                "left_keys": sorted(left_keys - right_keys),
+                "right_keys": sorted(right_keys - left_keys),
+                "left_count": len(left_buckets[slot]),
+                "right_count": len(right_buckets[slot]),
             })
             continue
 
-        differences = {
-            field: {
-                "left": a[field],
-                "right": b[field],
-            }
-            for field in RECORD_FIELDS
-            if a[field] != b[field]
-        }
+        # Same keys in the bucket: compare logical fields.
+        for key in sorted(left_keys):
+            a = left_by_key[key]
+            b = right_by_key[key]
 
-        if differences:
-            differing_records.append({
-                "slot": slot,
-                "key": a["key"],
-                "differences": differences,
-            })
-        else:
-            exact_matches.append(slot)
+            differences = {
+                field: {
+                    "left": a[field],
+                    "right": b[field],
+                }
+                for field in RECORD_FIELDS
+                if a[field] != b[field]
+            }
+
+            if differences:
+                differing_records.append({
+                    "slot": slot,
+                    "key": list(key),
+                    "chain_index": a.get("chain_index", 0),
+                    "differences": differences,
+                })
+            else:
+                exact_matches.append(slot)
 
     return {
         "format": "crossstate-snapshot-comparison",
-        "version": 1,
+        "version": 2,
         "left_target": left["source_target"],
         "right_target": right["source_target"],
-        "left_records": len(left_by_slot),
-        "right_records": len(right_by_slot),
+        "left_buckets": len(left_buckets),
+        "right_buckets": len(right_buckets),
+        "left_records": len(left["records"]),
+        "right_records": len(right["records"]),
         "exact_matches": exact_matches,
         "differing_records": differing_records,
-        "slot_conflicts": slot_conflicts,
+        "bucket_conflicts": bucket_conflicts,
+        "bucket_chain_overflow": bucket_chain_overflow,
         "left_only_slots": sorted(left_slots - right_slots),
         "right_only_slots": sorted(right_slots - left_slots),
         "equivalent": (
             left_slots == right_slots
             and not differing_records
-            and not slot_conflicts
+            and not bucket_conflicts
         ),
     }
 
@@ -125,13 +155,13 @@ def main():
         return 1
 
     print("========== SNAPSHOT COMPARISON ==========")
-    print(f"Left: {report['left_target']} ({report['left_records']} records)")
-    print(f"Right: {report['right_target']} ({report['right_records']} records)")
+    print(f"Left: {report['left_target']} ({report['left_buckets']} buckets, {report['left_records']} records)")
+    print(f"Right: {report['right_target']} ({report['right_buckets']} buckets, {report['right_records']} records)")
     print(f"Exact matches: {len(report['exact_matches'])}")
-    print(f"Same-slot records with different values: {len(report['differing_records'])}")
-    print(f"Same-slot conflicting keys: {len(report['slot_conflicts'])}")
-    print(f"Left-only slots: {len(report['left_only_slots'])}")
-    print(f"Right-only slots: {len(report['right_only_slots'])}")
+    print(f"Same-bucket records with different values: {len(report['differing_records'])}")
+    print(f"Bucket key conflicts: {len(report['bucket_conflicts'])}")
+    print(f"Left-only buckets: {len(report['left_only_slots'])}")
+    print(f"Right-only buckets: {len(report['right_only_slots'])}")
     print(f"Report: {output}")
     print("Equivalent:", report["equivalent"])
     print("SNAPSHOT_COMPARISON = PASS")
