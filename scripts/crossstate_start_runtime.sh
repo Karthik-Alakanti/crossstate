@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT="$HOME/work/crossstate"
+ROOT="${CROSSSTATE_ROOT:-$HOME/work/crossstate}"
+if [[ ! -d "$ROOT" ]]; then
+    ROOT="/home/karthik/work/crossstate"
+fi
 cd "$ROOT"
 
 PY="$HOME/venvs/crossstate/bin/python"
