@@ -562,17 +562,23 @@ class SmartNicTarget(DatapathTarget):
 # ---------------------------------------------------------------------------
 
 def create_target(target_type: str, **kwargs) -> DatapathTarget:
-    """Factory: create a DatapathTarget by type string."""
+    """Factory: create a DatapathTarget by type string.
+
+    Only keyword arguments accepted by the target class are forwarded;
+    unrelated kwargs (e.g. thrift_port for XdpTarget) are dropped.
+    """
     types = {
-        "bmv2": Bmv2Target,
-        "xdp": XdpTarget,
-        "tofino": TofinoTarget,
-        "smartnic": SmartNicTarget,
+        "bmv2": (Bmv2Target, {"name", "thrift_port"}),
+        "xdp": (XdpTarget, {"name", "map_name"}),
+        "tofino": (TofinoTarget, {"name", "device_id", "grpc_addr"}),
+        "smartnic": (SmartNicTarget, {"name", "iface", "map_name"}),
     }
     if target_type not in types:
         raise ValueError(f"Unknown target type: {target_type}. "
                          f"Available: {list(types)}")
-    return types[target_type](**kwargs)
+    cls, allowed_keys = types[target_type]
+    filtered = {k: v for k, v in kwargs.items() if k in allowed_keys}
+    return cls(**filtered)
 
 
 if __name__ == "__main__":
