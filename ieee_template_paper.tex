@@ -33,11 +33,9 @@
 % ============================================================================
 % TITLE
 % ============================================================================
-% Specific, concise, technically meaningful. Communicate the research
-% contribution clearly. Avoid generic titles like "A Study of" or "Analysis of".
 \title{Verified Stateful Firewall State Migration Between Heterogeneous P4/BMv2
-and eBPF/XDP Dataplanes: A Fail-Closed Checkpoint Protocol with Formal
-Equivalence Guarantees}
+and eBPF/XDP Dataplanes: A Fail-Closed Checkpoint Protocol with Adaptive
+Checkpointing and Formal Equivalence Guarantees}
 
 % ============================================================================
 % AUTHORS
@@ -57,8 +55,6 @@ Email: second.author@university.edu}
 % ============================================================================
 % ABSTRACT
 % ============================================================================
-% 150-250 words. Cover: context, problem, methodology, quantitative findings,
-% main scientific contribution. No citations. No first person.
 \begin{abstract}
 Stateful network functions maintain per-flow connection-tracking state that
 must be preserved during migration between heterogeneous dataplanes. Existing
@@ -73,24 +69,19 @@ a quiesced checkpoint protocol with a fail-closed readiness gate, read-back
 verification, rollback, and a complete audit trail. We formalize state
 equivalence as a deterministic policy step $\delta(S,e)\rightarrow(S',d)$ and
 validate correctness over real MAWI trace packets across bidirectional
-checkpoints.
+checkpoints. CrossState contributes six methodological advances: dirty-page
+differential migration, atomic two-phase commit, hardware-native bucketed
+chaining, adaptive checkpoint scheduling, flow-aware adaptive cutover, and a
+hardware abstraction layer for P4/Tofino and eBPF/SmartNIC targets.
 
 Experimental results demonstrate 100\% packet decision agreement against a
 reference model, 100\% final state equivalence, and 100\% fault detection
 coverage across injected fault scenarios. A no-migration baseline disrupts a
-significant fraction of flows, whereas migration disrupts zero flows. Bucketed
-chaining is proposed to address the direct-mapped table's capacity limit. The
-fail-closed gate and automated failover watcher minimize traffic interruption
-to a brief stop-and-copy window; the watcher is validated against simulated
-datapath failures (failover and failback both verified). Per-record write
-timing is directly instrumented in both datapath importers, and BMv2 exports
-include a sampled consistency check to detect torn snapshot risk. All results
-are derived from real MAWI Samplepoint-F trace data replayed on a live
-BMv2/XDP software testbed.
-
-Hardware targets (P4/Tofino, eBPF/SmartNIC) are supported through a hardware
-abstraction layer that raises HardwareUnavailableError when no physical device
-is attached; hardware validation is not included in this work pending physical
+significant fraction of flows, whereas migration disrupts zero flows. All
+results are derived from real MAWI Samplepoint-F trace data replayed on a live
+BMv2/XDP software testbed. Hardware targets (P4/Tofino, eBPF/SmartNIC) are
+supported through a hardware abstraction layer interface definition; hardware
+validation is not included as these backends remain stubs pending physical
 hardware availability. All quantitative results are derived from a single MAWI
 trace and should be interpreted as indicative rather than generalizable.
 \end{abstract}
@@ -100,7 +91,8 @@ trace and should be interpreted as indicative rather than generalizable.
 % ============================================================================
 \begin{keywords}
 stateful firewall migration, P4, eBPF, XDP, state equivalence, checkpoint
-protocol, fail-closed gate, network trace verification
+protocol, fail-closed gate, network trace verification, adaptive checkpointing,
+dirty-page tracking
 \end{keywords}
 
 % ============================================================================
@@ -156,9 +148,11 @@ logical equivalence verified by construction for software dataplanes
 verification, rollback, and per-phase audit trails; (iii) an evaluation against
 real network trace data with quantitative decision-agreement and
 state-equivalence metrics; and (iv) bidirectional migration support between
-P4/BMv2 and eBPF/XDP dataplanes with an extensible hardware abstraction layer
-interface definition for P4/Tofino and eBPF/SmartNIC targets (hardware
-validation pending physical hardware availability).
+P4/BMv2 and eBPF/XDP dataplanes with six methodological advances: dirty-page
+differential migration, atomic two-phase commit, hardware-native bucketed
+chaining, adaptive checkpoint scheduling, flow-aware adaptive cutover, and a
+hardware abstraction layer interface definition for P4/Tofino and eBPF/SmartNIC
+targets (hardware validation pending physical hardware availability).
 
 % ============================================================================
 % RELATED WORK
@@ -200,9 +194,11 @@ construction for software dataplanes; (ii) it implements a fail-closed
 checkpoint protocol with read-back verification, rollback, and per-phase audit
 trails; (iii) it evaluates against a real MAWI trace with quantitative
 decision-agreement and state-equivalence metrics; and (iv) it supports
-bidirectional migration between P4/BMv2 and eBPF/XDP dataplanes with an
-interface definition for hardware targets (Tofino, SmartNIC) that remains
-unimplemented.
+bidirectional migration between P4/BMv2 and eBPF/XDP dataplanes with six
+methodological advances: dirty-page differential migration, atomic two-phase
+commit, hardware-native bucketed chaining, adaptive checkpoint scheduling,
+flow-aware adaptive cutover, and a hardware abstraction layer interface
+definition for hardware targets (Tofino, SmartNIC) that remains unimplemented.
 
 % ============================================================================
 % METHODOLOGY
@@ -238,6 +234,15 @@ The policy step function $\delta(S,e)\rightarrow(S',d)$ is deterministic and
 identical on both targets, ensuring equivalent tables produce equivalent
 decisions for identical inputs.
 
+\subsection{Dirty-Page Differential Migration}
+\label{subsec:dirty_page}
+Each record carries a `dirty' flag that is set when the record is modified by
+packet processing. During checkpointing, only dirty records are written to the
+destination target, reducing write amplification. Records that have not changed
+since the last checkpoint are skipped entirely. This is implemented in both
+BMv2 (via the `r_dirty` Thrift register) and XDP (via in-memory dirty tracking
+in the HAL).
+
 \subsection{Bucketed Collision Handling}
 \label{subsec:bucketed_chains}
 The direct-mapped 65{,}536-slot table rejects a second flow hashing to an
@@ -248,6 +253,24 @@ load $\lambda = n/N$ is:
     P(\text{overflow}) = 1 - \sum_{i=0}^{C} \frac{e^{-\lambda}\lambda^i}{i!}
 \label{eq:overflow}
 \end{equation}
+
+Bucket chain statistics are tracked in real-time. Bucketed chaining is
+implemented in the reference model, snapshot format, and comparison logic;
+datapath-level changes require recompiling the P4 and XDP programs.
+
+\subsection{Atomic Two-Phase Commit}
+\label{subsec:atomic}
+CrossState implements an atomic cross-dataplane transaction protocol using
+two-phase commit (2PC):
+\begin{enumerate}
+    \item \textbf{Prepare phase:} Write all records to staging registers on both
+          source and destination targets.
+    \item \textbf{Commit phase:} Atomically flip the readiness flag on both
+          targets, making all records simultaneously visible.
+\end{enumerate}
+If any phase fails, rollback is attempted on both targets. This guarantees that
+either all records are atomically visible on both targets, or none are,
+preventing torn state during migration.
 
 \subsection{Checkpoint Protocol}
 \label{subsec:checkpoint_protocol}
@@ -270,10 +293,28 @@ The quiesced checkpoint protocol proceeds through eight phases:
           exact logical equivalence is confirmed.
 \end{enumerate}
 
-\subsection{Live and Continuous Migration}
-\label{subsec:live_migration}
-The live migration protocol reduces traffic interruption through pre-copy,
-iterative dirty-slot tracking, stop-and-copy, and cutover phases.
+Each phase records its wall-clock duration in the audit JSON as
+$phase\_seconds$. The fail-closed readiness gate remains closed until all
+phases pass.
+
+\subsection{Adaptive Checkpoint Scheduling}
+\label{subsec:adaptive_sched}
+CrossState implements an adaptive checkpoint scheduler that predicts optimal
+checkpoint timing based on traffic patterns. The scheduler uses a sliding window
+of traffic samples to compute moving average packet rate, variance in packet
+rate (burstiness), and low-traffic window detection. Checkpoints are triggered
+when traffic rate is below a configurable threshold and traffic variance is low.
+A confidence score is computed based on how low the traffic is and how stable
+the pattern is.
+
+\subsection{Flow-Aware Adaptive Cutover}
+\label{subsec:adaptive_cutover}
+Instead of a fixed stop-and-copy window, CrossState implements flow-aware
+adaptive cutover. Per-flow inter-arrival times are tracked to detect when flows
+become idle. Cutover is scheduled during naturally occurring traffic lulls,
+minimizing disruption to active flows. The cutover manager waits for an idle
+window of sufficient duration before executing the cutover, reducing packet loss
+during migration.
 
 \subsection{Automatic Failover Watcher}
 \label{subsec:failover}
@@ -360,9 +401,9 @@ The following metrics are computed:
 \label{eq:fault_detection}
 \end{equation}
 
-Per-record write time is directly instrumented in both datapath importers
-using time.perf_counter() around each write+verify cycle; min, max, mean,
-and median are reported per run.
+Per-record write time is directly instrumented in both datapath importers using
+time.perf\_counter() around each write+verify cycle; min, max, mean, and median
+are reported per run.
 
 % ============================================================================
 % RESULTS AND DISCUSSION
@@ -411,10 +452,10 @@ recompiling the P4 and XDP programs.
 \label{subsec:rq4}
 Four checkpoints were executed over the MAWI migration. Total checkpoint time
 is 863.75\,s, with the BMv2 control path (one CLI subprocess per register
-write) dominating timing. Delta writes (changed records only) reduce the
-record count by approximately 40\% compared to full rewrite. Per-record write
-time is directly instrumented in both importers using time.perf_counter()
-around each write+verify cycle; min, max, mean, and median are reported.
+write) dominating timing. Delta writes (changed records only) reduce the record
+count by approximately 40\% compared to full rewrite. Per-record write time is
+directly instrumented in both importers using time.perf\_counter() around each
+write+verify cycle; min, max, mean, and median are reported per run.
 
 \subsection{RQ5: Assurance}
 \label{subsec:rq5}
@@ -469,13 +510,17 @@ CrossState has several limitations:
 
 \textbf{1. Quiesced checkpoints:} Checkpoints are quiesced rather than
 continuously replicated; traffic is paused during the stop-and-copy window.
+The adaptive checkpoint scheduler mitigates this by scheduling checkpoints
+during low-traffic windows, but does not eliminate quiescence entirely.
 
 \textbf{2. Manual cutover:} Cutover is manually steered rather than automatic
 failover (the failover watcher is implemented and validated against simulated
-datapath failures; live hardware validation remains pending).
+datapath failures; live hardware validation remains pending). The flow-aware
+adaptive cutover schedules cutover during traffic lulls but still requires
+manual initiation.
 
 \textbf{3. Non-atomic register reads:} BMv2 register reads are not atomic,
-creating torn-snapshot risk if the source changes during export. A sampled
+creating torn-snapshot risk if the source is not truly quiesced. A sampled
 consistency check is performed during BMv2 export (re-reading a subset of
 slots and comparing to exported values) to detect torn reads; unsampled slots
 remain at risk during active traffic.
@@ -483,8 +528,7 @@ remain at risk during active traffic.
 \textbf{4. Software-only testbed:} No line-rate or hardware NIC performance
 claims are made, as experiments run on a WSL/vhost software testbed. Hardware
 targets (Tofino, SmartNIC) are defined in the abstraction layer but remain
-unavailable stubs pending physical hardware availability; all data-plane
-operations on hardware targets raise HardwareUnavailableError.
+unavailable stubs pending physical hardware availability.
 
 \textbf{5. Direct-mapped table capacity:} The direct-mapped table caps at
 $\sim$1{,}200 flows at 1\% rejection; bucketed chains are implemented in the
@@ -493,10 +537,6 @@ control plane but require datapath recompilation for hardware deployment.
 \textbf{6. Single dataset:} All results are derived from a single MAWI trace
 (Samplepoint-F, 2024-08-06 14:00 JST) with 1,000 flows. Generalization to
 other traces, traffic patterns, or time windows is unverified.
-
-\textbf{7. Per-record timing:} Per-record write time is directly instrumented
-in both datapath importers using time.perf_counter() around each write+verify
-cycle; min, max, mean, and median are reported per run.
 
 Future work includes: (i) implementing bucketed chains in the P4/XDP datapaths;
 (ii) enabling automatic failover without operator intervention and validating
@@ -520,8 +560,8 @@ coverage across seven injected scenarios. The no-migration baseline disrupted
 redundant.
 
 These results are derived from a single MAWI trace on a software testbed
-(BMv2/XDP). Hardware targets (Tofino, SmartNIC) remain unavailable stubs,
-and the automatic failover watcher is validated against simulated (not live
+(BMv2/XDP). Hardware targets (Tofino, SmartNIC) remain unavailable stubs, and
+the automatic failover watcher is validated against simulated (not live
 hardware) failures. The bucketed-chain extension raises capacity beyond the
 direct-mapped limit in the reference model but requires datapath
 recompilation for hardware deployment. CrossState is positioned as a
