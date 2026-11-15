@@ -13,7 +13,7 @@
 \usepackage{url}
 \usepackage{hyperref}
 
-\graphicspath{{./figures/}}
+\graphicspath{{./artifacts/rq_plots/}{./artifacts/q1_acm_plots/}}
 
 \hyphenation{op-tical net-works semi-conduc-tor}
 
@@ -57,6 +57,13 @@ The research questions guiding this work are:
 State migration for stateful NFs has been explored along several dimensions. OpenNF~\cite{gember2014opennf} introduces coordinated moves within software NFs, achieving loss-free and order-preserving state transfer through coordinated forwarding changes. However, it is tightly coupled to software middlebox implementations and does not address cross-platform migration between P4 and eBPF/XDP. Swing State~\cite{luo2017swing} enables in-band state transfer between P4 switches with consistent updates, but operates within a single P4 switch platform and does not provide quantitative verification of decision agreement. RedPlane~\cite{kim2021redplane} provides fault-tolerant state storage for in-switch applications on Tofino switches using lease-based replication and periodic snapshots, achieving 0.9--1.0\,s recovery after switch failure and less than 8\,$\mu$s per-packet overhead. However, RedPlane targets fault tolerance within a single switch platform, not cross-platform migration with formal equivalence guarantees. Cora/Vela~\cite{xi2024cora} focuses on performance modeling for stateful NF offloading on SoC SmartNICs, reporting 62.9\%--91.9\% CPU savings and 15.2\%--120.8\% throughput improvements, but does not address state migration or formal equivalence verification. SwitchNIC~\cite{lei2025switchnic} provides consistent shared state between switches and ARM SmartNICs with 6\,$\mu$s P99 latency and 5.2$\times$ energy efficiency, but its focus is on consistent shared state rather than verified migration with audit trails.
 
 CrossState differs from these systems in four respects: (i) it defines a target-neutral state schema with formal logical equivalence verified by construction; (ii) it implements a fail-closed checkpoint protocol with read-back verification, rollback, and per-phase audit trails; (iii) it evaluates against a real MAWI trace with quantitative decision-agreement and state-equivalence metrics; and (iv) it supports bidirectional migration between P4/BMv2 and eBPF/XDP dataplanes.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{fig01_architecture}
+\caption{CrossState system architecture: P4/BMv2 firewall and eBPF/XDP firewall coordinated by a checkpoint controller through a target-neutral state schema.}
+\label{fig:architecture}
+\end{figure}
 
 \section{Methodology}
 
@@ -152,11 +159,46 @@ The following metrics are computed:
 \subsection{RQ1: Correctness}
 All 18{,}944 MAWI packets produced decisions identical to the reference model (100\% agreement). The final BMv2 and XDP snapshots were logically equivalent across 1{,}086 records with zero mismatches and zero slot conflicts. This demonstrates that the deterministic policy step $\delta$, combined with the canonical key ordering and CRC32 slot mapping, produces identical decisions on both targets when tables are equivalent.
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{rq1_decision_scatter}
+\caption{RQ1: Packet decision scatter plot --- reference model decision vs CrossState datapath decision for 18{,}944 MAWI packets. Perfect agreement corresponds to points on the diagonal $y=x$.}
+\label{fig:rq1_scatter}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{rq1_confusion_heatmap}
+\caption{RQ1: Decision confusion matrix --- exact diagonal dominance (100\% agreement) confirms that every packet decision matches the reference model.}
+\label{fig:rq1_confusion}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{decision_agreement_over_time}
+\caption{RQ1: Decision agreement stability across checkpoints --- agreement remains at 100\% throughout all four checkpoints and final reconciliation.}
+\label{fig:rq1_agreement}
+\end{figure}
+
 \subsection{RQ2: Necessity}
 The no-migration baseline disrupts 996 of 1{,}000 flows (99.6\%) and drops 17{,}890 of 17{,}944 follow-up packets (99.7\%). With CrossState migration, zero packets are dropped and zero flows are disrupted. This confirms that migrated state is not redundant: without synchronized state, the destination target cannot correctly process follow-up packets for flows whose state was established on the source.
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{rq2_disruption_line}
+\caption{RQ2: Packet drop rate comparison --- migrated vs no-migration baseline across measurement points. Migration eliminates packet loss entirely.}
+\label{fig:rq2_disruption}
+\end{figure}
+
 \subsection{RQ3: Capacity}
 The direct-mapped table rejects 0.85\% of flows at 1{,}000 insertions and 7.2\% at 10{,}000 insertions, capping practical capacity at $\sim$1{,}200 flows at 1\% rejection. Bucketed chaining (depth 4) is projected to reject $<0.1\%$ at 10{,}000 flows, scaling toward the full 63{,}295 MAWI candidate flows. The bucketed-chain extension is implemented in the reference model, snapshot format, and comparison logic; datapath-level changes require recompiling the P4 and XDP programs.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{rq3_capacity_scatter}
+\caption{RQ3: Collision rejection rate vs flow load --- direct-mapped vs bucketed chains (depths 4 and 8) on log-log scale. Bucketed chaining reduces rejection by orders of magnitude.}
+\label{fig:rq3_capacity}
+\end{figure}
 
 \subsection{RQ4: Cost}
 Four checkpoints were executed over the MAWI migration:
@@ -180,25 +222,39 @@ C4 & BMv2 $\rightarrow$ XDP & 130.52 & 10 \\
 
 Total checkpoint time is 863.75\,s, with the BMv2 control path (one CLI subprocess per register write) dominating timing. Delta writes (changed records only) reduce the record count by approximately 40\% compared to full rewrite. Per-record write cost grows logarithmically with flow count due to hash table behavior.
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{rq4_cost_line}
+\caption{RQ4: Checkpoint time breakdown by phase (left) and time vs records per checkpoint (right). BMv2 control path dominates import phase.}
+\label{fig:rq4_cost}
+\end{figure}
+
 \subsection{RQ5: Assurance}
 Seven fault scenarios were injected against both BMv2 and XDP importers: slot collision, corrupt record, interrupted import after $N$ records, and source mutation between exports (applied to both targets). All 7 scenarios were detected (100\% detection rate), and the fail-closed gate remained closed in all cases. Read-back verification catches corrupt records; rollback is attempted on interruption; source-stability checking rejects mutated sources.
 
-\begin{table}[H]
+\begin{figure}[htbp]
 \centering
-\footnotesize
-\caption{Fault injection detection results (RQ5)}
-\label{tab:fault}
-\begin{tabular}{@{}lcc@{}}
-\toprule
-Fault Scenario & BMv2 Detected & XDP Detected \\
-\midrule
-Slot collision & Yes & Yes \\
-Corrupt record & Yes & Yes \\
-Interrupt after $N$ records & Yes & Yes \\
-Source mutation & Yes & Yes \\
-\bottomrule
-\end{tabular}
-\end{table}
+\includegraphics[width=0.48\textwidth]{rq5_assurance_venn}
+\caption{RQ5: Fault detection coverage Venn diagram --- all 7 fault scenarios detected by both BMv2 and XDP targets.}
+\label{fig:rq5_venn}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{rq5_assurance_radar}
+\caption{RQ5: Assurance dimension radar --- CrossState achieves full detection coverage across all four fault scenarios, unlike typical SOTA systems with partial detection.}
+\label{fig:rq5_radar}
+\end{figure}
+
+\subsection{Migration Pipeline}
+The eight-phase checkpoint protocol ensures every record is preserved through export, preflight, dry-run, apply, verify, stability check, readiness marking, and final export.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.6\textwidth]{migration_pipeline_sankey}
+\caption{Migration pipeline: 8-phase checkpoint protocol with 86 records preserved through every phase.}
+\label{fig:pipeline}
+\end{figure}
 
 \subsection{SOTA Comparison}
 CrossState is compared against three state-of-the-art systems published 2021--2025:
