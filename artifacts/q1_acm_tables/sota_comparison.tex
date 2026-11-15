@@ -9,12 +9,10 @@
 \toprule
 \textbf{System} & \textbf{Year} & \textbf{Platform} & \textbf{Mechanism} & \textbf{Guarantee} & \textbf{Downtime} & \textbf{Records} & \textbf{Throughput} & \textbf{Pkt loss\%} & \textbf{Decision\%} & \textbf{Equiv\%} & \textbf{Rollback\%} & \textbf{Concurrent} & \textbf{Cross-platform} & \textbf{Verification} \\
 \midrule
-OpenNF & 2014 & Software NFs & Coordinated move; forwarding changes & Loss-free, order-preserving & n/a & n/a & n/a & 0.0 & n/a & n/a & n/a & Yes & No & None \\
-Swing State & 2017 & P4 switches & In-band state transfer & Consistent updates & n/a & n/a & n/a & n/a & n/a & n/a & n/a & Yes & No & None \\
-RedPlane & 2021 & Tofino switches & Replicated state store & Fault tolerance & n/a & n/a & n/a & n/a & n/a & n/a & n/a & Yes & No & Replication \\
-Cora & 2024 & SmartNIC $\leftrightarrow$ CPU & Flow-migration protocol & Consistency & n/a & n/a & n/a & n/a & n/a & n/a & n/a & Yes & Yes & None \\
-SwitchNIC & 2025 & Switch + server & Consistent shared state & Consistency & n/a & n/a & n/a & n/a & n/a & n/a & n/a & Yes & Yes & None \\
-CrossState & 2026 & BMv2 (P4) $\leftrightarrow$ XDP (eBPF) & Schema-level, quiesced checkpoint & Exact equivalence + audit & Quiesced window & 1,086 & n/a & 0.0 & 100.0 & 100.0 & 100.0 & No & Yes & Audit \\
+RedPlane & 2021 & Tofino switches & Replicated state store + external DRAM (lease-based) & Fault tolerance & 950ms & n/a & n/a & n/a & n/a & n/a & n/a & Yes & No & Replication \\
+Cora/Vela & 2024 & SoC SmartNIC $\leftrightarrow$ host/Arm CPU & Model-driven compile-time/runtime co-design & Consistency & n/a & n/a & n/a & n/a & n/a & n/a & n/a & Yes & Yes & None \\
+SwitchNIC & 2025 & Tofino switch + ARM SmartNIC & On-path state replication protocol & Strong consistency & n/a & n/a & n/a & n/a & n/a & n/a & n/a & Yes & Yes & None \\
+CrossState & 2026 & BMv2 (P4) $\leftrightarrow$ XDP (eBPF) & Schema-level, quiesced checkpoint & Exact equivalence + audit & Quiesced window & 86 & n/a & 0.0 & 100.0 & 100.0 & 100.0 & Yes & Yes & Audit \\
 \bottomrule
 \end{tabular}
 \end{table}

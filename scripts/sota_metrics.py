@@ -61,9 +61,9 @@ SOTA_REFERENCES: dict[str, SotaReference] = {
         name="RedPlane",
         year=2021,
         platform="Tofino switches",
-        mechanism="replicated state store + external DRAM",
+        mechanism="replicated state store + external DRAM (lease-based)",
         guarantee="fault tolerance",
-        downtime_ms=1000.0,
+        downtime_ms=950.0,
         state_transfer_records=None,
         migration_throughput_rps=None,
         packet_loss_percent=None,
@@ -75,15 +75,15 @@ SOTA_REFERENCES: dict[str, SotaReference] = {
         cross_platform=False,
         verification_level="replication",
     ),
-    "Cora": SotaReference(
-        name="Cora",
+    "Cora/Vela": SotaReference(
+        name="Cora/Vela",
         year=2024,
-        platform="SmartNIC <-> CPU",
-        mechanism="flow-migration protocol (3-step)",
+        platform="SoC SmartNIC <-> host/Arm CPU",
+        mechanism="model-driven compile-time/runtime co-design",
         guarantee="consistency",
-        downtime_ms=18000.0,
-        state_transfer_records=56000,
-        migration_throughput_rps=3111.0,
+        downtime_ms=None,
+        state_transfer_records=None,
+        migration_throughput_rps=None,
         packet_loss_percent=None,
         decision_agreement_percent=None,
         state_equivalence_percent=None,
@@ -96,7 +96,7 @@ SOTA_REFERENCES: dict[str, SotaReference] = {
     "SwitchNIC": SotaReference(
         name="SwitchNIC",
         year=2025,
-        platform="switch + server (Tofino + ARM SmartNIC)",
+        platform="Tofino switch + ARM SmartNIC",
         mechanism="on-path state replication protocol",
         guarantee="strong consistency",
         downtime_ms=None,
@@ -202,6 +202,33 @@ def sota_table(crossstate: CrossStateResult) -> str:
     lines.append("- Concurrent: supports migration while traffic flows.")
     lines.append("- Cross-platform: works across heterogeneous targets (P4 <-> eBPF).")
     lines.append("- Verification: none / read_back / full_equivalence / audit.")
+    lines.append("")
+    lines.append("## Paper-Specific Measured Metrics (not in table above)")
+    lines.append("")
+    lines.append("| Paper | Key Metrics |")
+    lines.append("|-------|-------------|")
+    lines.append(
+        "| RedPlane (SIGCOMM'21) | "
+        "Recovery: 0.9-1.0s after switch failure; "
+        "Per-packet overhead: <8µs (write-centric), negligible (read-centric); "
+        "ASIC resources: <14%; "
+        "Verification: TLA+ model-checked lease protocol |"
+    )
+    lines.append(
+        "| Cora/Vela (arXiv'24) | "
+        "CPU savings: 62.9%-91.9% vs best baseline; "
+        "Throughput improvement: 15.2%-120.8% (NATLB); "
+        "Lock contention: 5-10x performance variation for similar memory ops; "
+        "Verification: none (compiler optimization) |"
+    )
+    lines.append(
+        "| SwitchNIC (CoNEXT'25) | "
+        "P99 latency: 6µs; Fast-path: ~350ns; "
+        "Energy efficiency: 5.2× better than server-based; "
+        "Processing latency: 6.4× better than server-based; "
+        "Traffic churn: 100k new flows/min tolerated; "
+        "Verification: none (strong consistency via on-path replication) |"
+    )
     lines.append("")
     lines.append(
         "n/a = not reported in the source paper (qualitative guarantee only). "

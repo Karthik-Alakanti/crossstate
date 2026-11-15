@@ -1,0 +1,93 @@
+{
+  "generated_utc": "2026-11-15T11:29:52.196583+00:00",
+  "experiments": [
+    {
+      "source": "/home/karthik/work/crossstate/artifacts/live_migration/sota_comparison.json",
+      "experiment": "mawi_live_continuous_migration",
+      "checkpoints": 1,
+      "total_checkpoint_seconds": 7.484744,
+      "per_record_seconds": null,
+      "records_written": 86,
+      "packet_loss_percent": null,
+      "decision_agreement_percent": null,
+      "state_equivalence_percent": 100.0,
+      "rollback_success_percent": null,
+      "flows_disrupted": 0,
+      "flows_total": 86,
+      "downtime_ms": 100.0,
+      "verification_level": "audit"
+    },
+    {
+      "source": "/home/karthik/work/crossstate/artifacts/sota_comparison/sota_comparison.json",
+      "experiment": "mawi_live_continuous_migration",
+      "checkpoints": 1,
+      "total_checkpoint_seconds": 7.484744,
+      "per_record_seconds": null,
+      "records_written": 86,
+      "packet_loss_percent": null,
+      "decision_agreement_percent": null,
+      "state_equivalence_percent": 100.0,
+      "rollback_success_percent": null,
+      "flows_disrupted": 0,
+      "flows_total": 86,
+      "downtime_ms": 100.0,
+      "verification_level": "audit"
+    }
+  ],
+  "sota_references": {
+    "RedPlane": {
+      "name": "RedPlane",
+      "year": 2021,
+      "platform": "Tofino switches",
+      "mechanism": "replicated state store + external DRAM (lease-based)",
+      "guarantee": "fault tolerance",
+      "downtime_ms": 950.0,
+      "state_transfer_records": null,
+      "migration_throughput_rps": null,
+      "packet_loss_percent": null,
+      "decision_agreement_percent": null,
+      "state_equivalence_percent": null,
+      "rollback_success_percent": null,
+      "per_record_ms": null,
+      "concurrent_traffic": true,
+      "cross_platform": false,
+      "verification_level": "replication"
+    },
+    "Cora/Vela": {
+      "name": "Cora/Vela",
+      "year": 2024,
+      "platform": "SoC SmartNIC <-> host/Arm CPU",
+      "mechanism": "model-driven compile-time/runtime co-design",
+      "guarantee": "consistency",
+      "downtime_ms": null,
+      "state_transfer_records": null,
+      "migration_throughput_rps": null,
+      "packet_loss_percent": null,
+      "decision_agreement_percent": null,
+      "state_equivalence_percent": null,
+      "rollback_success_percent": null,
+      "per_record_ms": null,
+      "concurrent_traffic": true,
+      "cross_platform": true,
+      "verification_level": "none"
+    },
+    "SwitchNIC": {
+      "name": "SwitchNIC",
+      "year": 2025,
+      "platform": "Tofino switch + ARM SmartNIC",
+      "mechanism": "on-path state replication protocol",
+      "guarantee": "strong consistency",
+      "downtime_ms": null,
+      "state_transfer_records": null,
+      "migration_throughput_rps": null,
+      "packet_loss_percent": null,
+      "decision_agreement_percent": null,
+      "state_equivalence_percent": null,
+      "rollback_success_percent": null,
+      "per_record_ms": null,
+      "concurrent_traffic": true,
+      "cross_platform": true,
+      "verification_level": "none"
+    }
+  }
+}
