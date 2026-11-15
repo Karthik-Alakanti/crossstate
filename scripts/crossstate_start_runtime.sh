@@ -7,7 +7,10 @@ if [[ ! -d "$ROOT" ]]; then
 fi
 cd "$ROOT"
 
-PY="$HOME/venvs/crossstate/bin/python"
+PY="${CROSSSTATE_PY:-$HOME/venvs/crossstate/bin/python}"
+if [[ ! -x "$PY" ]]; then
+    PY="/home/karthik/venvs/crossstate/bin/python"
+fi
 VENV_SITE="$("$PY" -c 'import site; print(site.getsitepackages()[0])')"
 export PYTHONPATH="$ROOT:$VENV_SITE"
 
