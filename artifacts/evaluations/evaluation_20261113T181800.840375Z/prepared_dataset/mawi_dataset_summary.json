@@ -1,0 +1,10 @@
+{
+  "dataset": "Generated synthetic CrossState TCP workload",
+  "dataset_type": "synthetic",
+  "seed": 42,
+  "requested_packets": 500,
+  "generated_packets": 500,
+  "generated_flows": 20,
+  "packet_count_is_exact": true,
+  "note": "Synthetic packets, not observed network traffic."
+}

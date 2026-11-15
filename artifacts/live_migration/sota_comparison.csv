@@ -1,0 +1,5 @@
+system,year,platform,mechanism,guarantee,downtime_ms,state_transfer_records,migration_throughput_rps,packet_loss_percent,decision_agreement_percent,state_equivalence_percent,rollback_success_percent,per_record_ms,concurrent_traffic,cross_platform,verification_level
+CrossState,2026,BMv2 (P4) <-> XDP (eBPF),schema-level quiesced checkpoint,exact equivalence + audit,100.0,86,11.773245108832699,None,None,100.0,None,None,True,True,audit
+RedPlane,2021,Tofino switches,replicated state store + external DRAM (lease-based),fault tolerance,950.0,None,None,None,None,None,None,None,True,False,replication
+Cora/Vela,2024,SoC SmartNIC <-> host/Arm CPU,model-driven compile-time/runtime co-design,consistency,None,None,None,None,None,None,None,None,True,True,none
+SwitchNIC,2025,Tofino switch + ARM SmartNIC,on-path state replication protocol,strong consistency,None,None,None,None,None,None,None,None,True,True,none

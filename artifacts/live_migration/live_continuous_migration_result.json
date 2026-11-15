@@ -1,0 +1,47 @@
+{
+  "experiment": "CrossState live continuous migration",
+  "created_utc": "2026-11-15T11:42:01.275473+00:00",
+  "source_target": "bmv2",
+  "dest_target": "xdp",
+  "source_type": "P4/BMv2 (software)",
+  "dest_type": "eBPF/XDP (software)",
+  "total_records": 86,
+  "pre_copy_iterations": 1,
+  "total_dirty_slots": 0,
+  "stop_copy_duration_ms": 100.0,
+  "total_duration_seconds": 7.304698,
+  "final_equivalent": true,
+  "status": "PASS",
+  "phases": [
+    {
+      "name": "initial_pre_copy",
+      "start_utc": "2026-11-15T11:41:50.249050+00:00",
+      "end_utc": "2026-11-15T11:41:52.003982+00:00",
+      "duration_seconds": 1.754932,
+      "slots_copied": 86,
+      "dirty_slots": 0,
+      "status": "PASS",
+      "notes": "Initial pre-copy: 86 records, 0 dirty"
+    },
+    {
+      "name": "stop_and_copy",
+      "start_utc": "2026-11-15T11:41:53.866447+00:00",
+      "end_utc": "2026-11-15T11:41:57.520290+00:00",
+      "duration_seconds": 3.653843,
+      "slots_copied": 0,
+      "dirty_slots": 0,
+      "status": "PASS",
+      "notes": "Stop-and-copy: 0 records, 0 remaining dirty"
+    },
+    {
+      "name": "cutover",
+      "start_utc": "2026-11-15T11:41:57.520327+00:00",
+      "end_utc": "2026-11-15T11:41:59.416250+00:00",
+      "duration_seconds": 1.895923,
+      "slots_copied": 86,
+      "dirty_slots": 0,
+      "status": "PASS",
+      "notes": "Cutover: traffic switched to xdp, equivalent=True"
+    }
+  ]
+}

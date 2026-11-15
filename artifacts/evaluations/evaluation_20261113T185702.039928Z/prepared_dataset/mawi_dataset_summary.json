@@ -1,0 +1,63 @@
+{
+  "dataset": "MAWI Samplepoint-F 2024-08-06 14:00 JST",
+  "source_file": "/mnt/e/SDN/datasets/mawi/202408061400.pcap.gz",
+  "source_size_bytes": 6228786393,
+  "capture_frames_scanned": 201918230,
+  "ipv4_tcp_packets": 50526462,
+  "ipv4_tcp_ip_bytes": 2395953704,
+  "tcp_flag_packet_counts": {
+    "SYN": 13117980,
+    "ACK": 38399595,
+    "SYN_ACK": 1527108,
+    "FIN": 1113100,
+    "RST": 1331394
+  },
+  "global_timestamp_regressions": 567891,
+  "capture_start_timestamp_us": 1722920400232749,
+  "capture_duration_seconds": 900.434019,
+  "frame_classification_counts": {
+    "frames": 201918230,
+    "ipv4_non_tcp": 82437417,
+    "truncated_tcp": 40677385,
+    "ipv4_tcp_packets": 50526462,
+    "ipv4_tcp_bytes": 2395953704,
+    "non_ipv4": 28272128,
+    "bad_tcp_header": 2480,
+    "nonfirst_fragment": 2358
+  },
+  "idle_timeout_us": 30000000,
+  "max_packets_per_flow": 1000,
+  "selected_complete_bidirectional_handshakes": 1000,
+  "candidate_flows_started_tracking": 63295,
+  "pending_candidates_evicted": 0,
+  "slot_rejections_against_existing_or_selected": 23,
+  "occupied_snapshot_used": "/mnt/e/SDN/scale_1000/run_20261111T185637.132149Z/08_final_bmv2.json",
+  "occupied_slots_excluded": 1086,
+  "selected_unique_slots": 1000,
+  "last_selected_capture_record": 17777870,
+  "selected_source_timestamp_regressions": 0,
+  "replay_packet_count": 18944,
+  "replay_ip_bytes": 973852,
+  "timestamp_regressions_normalized": 0,
+  "replay_pcap": "/mnt/e/SDN/datasets/mawi/processed/run_20261113T143001Z/mawi_crossstate_replay.pcap",
+  "manifest_csv": "/mnt/e/SDN/datasets/mawi/processed/run_20261113T143001Z/mawi_selected_flow_manifest.csv",
+  "shim": {
+    "ether_type": "0x88B5",
+    "timestamp_bytes": 6,
+    "packet_id_bytes": 4,
+    "direction_flag_byte": 1,
+    "inner_ethertype": "0x0800",
+    "direction_1_means": "captured TCP initiator to responder",
+    "direction_0_means": "captured TCP responder to initiator",
+    "placeholder_macs": true
+  },
+  "preparation_only": true,
+  "live_datapath_injection_performed": false,
+  "important_limitation": "This preparation selects complete observed IPv4/TCP handshakes. It does not establish an enterprise inside/outside trust boundary. The live replay adapter must map initiator/responder to the CrossState inside/outside bit and replace placeholder MACs. Sessions are truncated at their first FIN/RST.",
+  "output_directory": "/mnt/e/SDN/datasets/mawi/processed/run_20261113T143001Z",
+  "evaluation_subset": {
+    "selected_flows": 20,
+    "selected_packets": 301,
+    "selection": "complete TCP flows only"
+  }
+}

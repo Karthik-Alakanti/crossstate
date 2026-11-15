@@ -1,0 +1,13 @@
+{
+  "mode": "in_memory_reference_model_simulation",
+  "status": "PASS",
+  "selected_real_flows": 372,
+  "selected_real_mawi_packets": 4998,
+  "synthetic_controls": 7,
+  "synthetic_control_allow": 4,
+  "synthetic_control_drop": 3,
+  "checkpoints": 4,
+  "simulated_final_records": 373,
+  "final_tables_equal": true,
+  "scope": "In-memory reference-model simulation. Not independent backend or live datapath evidence."
+}

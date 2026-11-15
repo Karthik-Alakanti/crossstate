@@ -1,0 +1,882 @@
+#!/usr/bin/env python3
+"""Prepare compressed MAWI traffic for CrossState replay.
+
+This is a preparation-only pipeline. It does not transmit packets or
+modify BMv2/XDP state.
+
+Pass 1: characterize capture and find complete bidirectional TCP handshakes.
+Pass 2: stream selected sessions into a CrossState-compatible PCAP.
+
+Selected sessions avoid CRC32 slots already occupied by the latest G7
+final BMv2 snapshot. Flows stop at the first FIN/RST or idle timeout.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import gzip
+import json
+import struct
+import sys
+from collections import Counter, OrderedDict
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+try:
+    from ref.model import Ev, canon, slot_of
+except Exception as exc:
+    raise SystemExit(f"Cannot import CrossState reference model: {exc}")
+
+ETH_P_IP = 0x0800
+ETH_P_VLAN = {0x8100, 0x88A8, 0x9100}
+ETH_P_CROSSSTATE = 0x88B5
+IPPROTO_TCP = 6
+
+TCP_FIN = 0x01
+TCP_SYN = 0x02
+TCP_RST = 0x04
+TCP_ACK = 0x10
+
+PCAP_DLT_EN10MB = 1
+PCAPNG_MAGIC = b"\x0a\x0d\x0d\x0a"
+
+# Placeholder MACs. A future live replayer must replace these with
+# the MAC addresses of its transmit and peer interfaces.
+PLACEHOLDER_DST = bytes.fromhex("020000000002")
+PLACEHOLDER_SRC = bytes.fromhex("020000000001")
+
+
+def open_pcap(path):
+    """Open classic PCAP or gzip-compressed classic PCAP."""
+    fh = gzip.open(path, "rb") if path.suffix.lower() == ".gz" else path.open("rb")
+    header = fh.read(24)
+
+    if len(header) != 24:
+        fh.close()
+        raise ValueError("Input is too short for a classic PCAP header.")
+
+    magic = header[:4]
+
+    if magic == PCAPNG_MAGIC:
+        fh.close()
+        raise ValueError(
+            "PCAPNG is not supported by this script. "
+            "Convert using editcap -F pcap input.pcapng output.pcap"
+        )
+
+    formats = {
+        b"\xd4\xc3\xb2\xa1": ("<", 1),
+        b"\xa1\xb2\xc3\xd4": (">", 1),
+        b"\x4d\x3c\xb2\xa1": ("<", 1000),
+        b"\xa1\xb2\x3c\x4d": (">", 1000),
+    }
+
+    if magic not in formats:
+        fh.close()
+        raise ValueError(f"Unsupported PCAP magic: {magic.hex()}")
+
+    endian, fraction_divisor = formats[magic]
+
+    major, minor, _zone, _sigfigs, snaplen, linktype = struct.unpack(
+        endian + "HHiIII", header[4:24]
+    )
+
+    if major != 2:
+        fh.close()
+        raise ValueError(f"Unsupported PCAP version: {major}.{minor}")
+
+    if linktype != PCAP_DLT_EN10MB:
+        fh.close()
+        raise ValueError(
+            f"Expected Ethernet link type 1, found {linktype}."
+        )
+
+    return fh, endian, fraction_divisor, snaplen, linktype
+
+
+def packets(path):
+    """Yield (record_index, timestamp_seconds, timestamp_microseconds, frame)."""
+    fh, endian, divisor, _snaplen, _linktype = open_pcap(path)
+    record_index = 0
+
+    try:
+        while True:
+            rec = fh.read(16)
+
+            if not rec:
+                break
+
+            if len(rec) != 16:
+                raise EOFError("Truncated PCAP packet header.")
+
+            sec, fraction, incl_len, orig_len = struct.unpack(
+                endian + "IIII", rec
+            )
+
+            if incl_len > 64 * 1024 * 1024:
+                raise ValueError(f"Unreasonable packet length: {incl_len}")
+
+            frame = fh.read(incl_len)
+
+            if len(frame) != incl_len:
+                raise EOFError("Truncated PCAP packet body.")
+
+            record_index += 1
+            frac_us = fraction if divisor == 1 else fraction // 1000
+            ts_us = sec * 1_000_000 + frac_us
+
+            yield record_index, ts_us / 1_000_000.0, ts_us, frame
+
+    finally:
+        fh.close()
+
+
+def parse_ipv4_tcp(frame):
+    """Parse Ethernet/VLAN/IPv4/TCP, returning details or a skip reason."""
+    if len(frame) < 14:
+        return "short_ethernet"
+
+    ethertype = struct.unpack("!H", frame[12:14])[0]
+    offset = 14
+
+    while ethertype in ETH_P_VLAN:
+        if len(frame) < offset + 4:
+            return "short_vlan"
+
+        ethertype = struct.unpack("!H", frame[offset + 2:offset + 4])[0]
+        offset += 4
+
+    if ethertype != ETH_P_IP:
+        return "non_ipv4"
+
+    if len(frame) < offset + 20:
+        return "short_ipv4"
+
+    ipraw = frame[offset:]
+    version = ipraw[0] >> 4
+    ihl = (ipraw[0] & 0x0F) * 4
+
+    if version != 4 or ihl < 20 or len(ipraw) < ihl:
+        return "bad_ipv4_header"
+
+    total_len = struct.unpack("!H", ipraw[2:4])[0]
+
+    if total_len < ihl:
+        return "bad_ipv4_length"
+
+    if ipraw[9] != IPPROTO_TCP:
+        return "ipv4_non_tcp"
+
+    frag = struct.unpack("!H", ipraw[6:8])[0]
+
+    if frag & 0x1FFF:
+        return "nonfirst_fragment"
+
+    if total_len > len(ipraw) or total_len < ihl + 20:
+        return "truncated_tcp"
+
+    tcp = ipraw[ihl:total_len]
+    tcp_hlen = (tcp[12] >> 4) * 4
+
+    if tcp_hlen < 20 or len(tcp) < tcp_hlen:
+        return "bad_tcp_header"
+
+    src_ip = int.from_bytes(ipraw[12:16], "big")
+    dst_ip = int.from_bytes(ipraw[16:20], "big")
+    src_port, dst_port = struct.unpack("!HH", tcp[:4])
+
+    return {
+        "src_ip": src_ip,
+        "dst_ip": dst_ip,
+        "src_port": src_port,
+        "dst_port": dst_port,
+        "flags": tcp[13],
+        "ip_len": total_len,
+        "ip_packet": ipraw[:total_len],
+    }
+
+
+def flow_identity(p):
+    src = (int(p["src_ip"]), int(p["src_port"]))
+    dst = (int(p["dst_ip"]), int(p["dst_port"]))
+
+    ev = Ev(
+        src[0], src[1], dst[0], dst[1], 6,
+        True, True, False, False, False, int(p["ip_len"]), 0,
+    )
+
+    key = tuple(int(x) for x in canon(ev))
+    return key, src, dst
+
+
+def get_slot(key):
+    return int(slot_of(key))
+
+
+def load_occupied_slots(snapshot_path, scale_root):
+    chosen = snapshot_path
+
+    if chosen is None and scale_root.exists():
+        candidates = list(scale_root.glob("run_*/08_final_bmv2.json"))
+
+        if candidates:
+            chosen = max(candidates, key=lambda p: p.stat().st_mtime)
+
+    if chosen is None:
+        return set(), None
+
+    data = json.loads(chosen.read_text())
+    slots = {int(r["slot"]) for r in data.get("records", [])}
+
+    return slots, chosen
+
+
+def write_pcap_header(fh):
+    fh.write(struct.pack("<IHHIIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1))
+
+
+def write_pcap_packet(fh, ts_us, frame):
+    sec, usec = divmod(ts_us, 1_000_000)
+    fh.write(struct.pack("<IIII", sec, usec, len(frame), len(frame)))
+    fh.write(frame)
+
+
+def inspect_and_prepare(args):
+    source = args.input.expanduser().resolve()
+
+    if not source.is_file():
+        raise FileNotFoundError(source)
+
+    occupied, occupied_path = load_occupied_slots(
+        args.occupied_snapshot,
+        args.scale_root,
+    )
+
+    if occupied_path:
+        print(f"Avoiding {len(occupied)} occupied slots from {occupied_path}")
+    else:
+        print(
+            "WARNING: No G7 snapshot found. "
+            "Only selected-session collisions will be avoided."
+        )
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    outdir = args.output_dir / f"run_{stamp}"
+    outdir.mkdir(parents=True, exist_ok=False)
+
+    # ---------------------------------------------------------
+    # PASS 1: capture characterization and handshake discovery
+    # ---------------------------------------------------------
+    print("\n========== PASS 1: CAPTURE CHARACTERIZATION ==========")
+
+    global_stats = Counter()
+    tcp_flags = Counter()
+    pending = OrderedDict()
+    selected = {}
+
+    selected_slots = set(occupied)
+    candidate_flows_seen = 0
+    pending_evictions = 0
+    slot_rejections = 0
+    timestamp_regressions = 0
+
+    capture_min_ts = None
+    capture_max_ts = None
+    previous_capture_ts = None
+    capture_packets = 0
+
+    for record_index, _ts, ts_us, frame in packets(source):
+        capture_packets += 1
+        global_stats["frames"] += 1
+
+        if capture_min_ts is None or ts_us < capture_min_ts:
+            capture_min_ts = ts_us
+
+        if capture_max_ts is None or ts_us > capture_max_ts:
+            capture_max_ts = ts_us
+
+        if previous_capture_ts is not None and ts_us < previous_capture_ts:
+            timestamp_regressions += 1
+
+        previous_capture_ts = ts_us
+
+        if capture_packets % 1_000_000 == 0:
+            print(
+                f"PASS 1 scanned {capture_packets:,} frames; "
+                f"selected {len(selected):,}/{args.max_flows}",
+                flush=True,
+            )
+
+        parsed = parse_ipv4_tcp(frame)
+
+        if isinstance(parsed, str):
+            global_stats[parsed] += 1
+            continue
+
+        global_stats["ipv4_tcp_packets"] += 1
+        global_stats["ipv4_tcp_bytes"] += parsed["ip_len"]
+
+        flags = parsed["flags"]
+        tcp_flags["SYN"] += bool(flags & TCP_SYN)
+        tcp_flags["ACK"] += bool(flags & TCP_ACK)
+        tcp_flags["SYN_ACK"] += bool(
+            (flags & (TCP_SYN | TCP_ACK)) == (TCP_SYN | TCP_ACK)
+        )
+        tcp_flags["FIN"] += bool(flags & TCP_FIN)
+        tcp_flags["RST"] += bool(flags & TCP_RST)
+
+        key, src, _dst = flow_identity(parsed)
+
+        # Continue tracking selected flows after reaching max_flows.
+        # Stop at the first FIN/RST or idle-timeout boundary.
+        selected_info = selected.get(key)
+
+        if selected_info is not None:
+            if selected_info["stopped"]:
+                continue
+
+            previous_ts = selected_info["last_seen_us"]
+
+            if (
+                ts_us >= previous_ts
+                and ts_us - previous_ts > args.idle_timeout_us
+            ):
+                selected_info["idle_timeout_boundary"] = True
+                selected_info["stopped"] = True
+                continue
+
+            if ts_us < previous_ts:
+                selected_info["source_timestamp_regressions"] += 1
+            else:
+                selected_info["last_seen_us"] = ts_us
+
+            selected_info["last_record_index"] = record_index
+
+            if flags & (TCP_FIN | TCP_RST):
+                selected_info["terminal_seen"] = True
+                selected_info["stopped"] = True
+
+            continue
+
+        if len(selected) >= args.max_flows:
+            continue
+
+        state = pending.get(key)
+
+        if state is not None:
+            if (
+                ts_us >= state["last_seen_us"]
+                and ts_us - state["last_seen_us"] > args.idle_timeout_us
+            ):
+                pending.pop(key, None)
+                state = None
+
+        if state is None:
+            candidate_flows_seen += 1
+
+            state = {
+                "key": key,
+                "initiator": None,
+                "syn_ts_us": None,
+                "syn_record_index": None,
+                "synack_seen": False,
+                "last_seen_us": ts_us,
+                "source_timestamp_regressions": 0,
+            }
+
+            pending[key] = state
+
+            if len(pending) > args.max_pending:
+                pending.popitem(last=False)
+                pending_evictions += 1
+
+        else:
+            if ts_us < state["last_seen_us"]:
+                state["source_timestamp_regressions"] += 1
+            else:
+                state["last_seen_us"] = ts_us
+
+            pending.move_to_end(key)
+
+        # Reject a pending handshake if the flow terminates before
+        # the initiator's final ACK has been observed.
+        if flags & (TCP_FIN | TCP_RST):
+            pending.pop(key, None)
+            continue
+
+        syn = bool(flags & TCP_SYN)
+        ack = bool(flags & TCP_ACK)
+
+        if syn and not ack:
+            if state["initiator"] is None:
+                state["initiator"] = src
+                state["syn_ts_us"] = ts_us
+                state["syn_record_index"] = record_index
+
+        elif syn and ack:
+            if state["initiator"] is not None and src != state["initiator"]:
+                state["synack_seen"] = True
+
+        elif ack and not syn:
+            if state["synack_seen"] and state["initiator"] == src:
+                slot = get_slot(key)
+
+                if slot in selected_slots:
+                    slot_rejections += 1
+                    pending.pop(key, None)
+                    continue
+
+                a = key[0:2]
+                b = key[2:4]
+                initiator = state["initiator"]
+                responder = b if initiator == a else a
+
+                selected[key] = {
+                    "key": list(key),
+                    "slot": slot,
+                    "initiator": list(initiator),
+                    "responder": list(responder),
+                    "syn_ts_us": int(state["syn_ts_us"]),
+                    "syn_record_index": int(state["syn_record_index"]),
+                    "last_record_index": record_index,
+                    "last_seen_us": max(
+                        int(state["last_seen_us"]), int(ts_us)
+                    ),
+                    "source_timestamp_regressions": int(
+                        state["source_timestamp_regressions"]
+                    ),
+                    "terminal_seen": bool(flags & (TCP_FIN | TCP_RST)),
+                    "idle_timeout_boundary": False,
+                    "stopped": bool(flags & (TCP_FIN | TCP_RST)),
+                    "handshake_complete": True,
+                }
+
+                selected_slots.add(slot)
+                pending.pop(key, None)
+
+                if len(selected) % 100 == 0 or len(selected) == args.max_flows:
+                    print(
+                        f"Eligible sessions: {len(selected)}/{args.max_flows}",
+                        flush=True,
+                    )
+
+    if capture_min_ts is None:
+        raise RuntimeError("Capture contains no packets.")
+
+    if len(selected) < args.max_flows:
+        raise RuntimeError(
+            f"Only {len(selected)} complete bidirectional handshakes "
+            f"found; requested {args.max_flows}. "
+            "Try a smaller --max-flows value."
+        )
+
+    max_selected_record_index = max(
+        int(info["last_record_index"])
+        for info in selected.values()
+    )
+
+    print(
+        "Last selected capture record:",
+        f"{max_selected_record_index:,}",
+    )
+
+    print(f"Capture frames scanned: {capture_packets:,}")
+    print(f"IPv4/TCP packets: {global_stats['ipv4_tcp_packets']:,}")
+    print(f"Selected complete sessions: {len(selected):,}")
+    print(f"Pending candidates evicted: {pending_evictions:,}")
+    print(f"Hash-slot rejections: {slot_rejections:,}")
+    print(f"Capture timestamp regressions: {timestamp_regressions:,}")
+
+    # ---------------------------------------------------------
+    # PASS 2: write selected flows in CrossState shim format
+    # ---------------------------------------------------------
+    print("\n========== PASS 2: BUILD REPLAY PCAP ==========")
+
+    replay_path = outdir / "mawi_crossstate_replay.pcap"
+
+    per_flow = {
+        key: {
+            "packets": 0,
+            "forward_packets": 0,
+            "reverse_packets": 0,
+            "ip_bytes": 0,
+            "syn": 0,
+            "synack": 0,
+            "ack": 0,
+            "fin": 0,
+            "rst": 0,
+            "closed": False,
+            "stopped": False,
+            "idle_timeout_boundary": False,
+            "packet_cap_reached": False,
+            "last_ts_us": None,
+            "time_regressions": 0,
+        }
+        for key in selected
+    }
+
+    packet_id = 1
+    selected_packet_count = 0
+    selected_ip_bytes = 0
+    normalized_regressions = 0
+    second_pass_frames = 0
+
+    with replay_path.open("wb") as out:
+        write_pcap_header(out)
+
+        for record_index, _ts, ts_us, frame in packets(source):
+            if record_index > max_selected_record_index:
+                break
+
+            second_pass_frames += 1
+
+            if second_pass_frames % 1_000_000 == 0:
+                print(
+                    f"PASS 2 scanned {second_pass_frames:,}; "
+                    f"wrote {selected_packet_count:,} replay packets",
+                    flush=True,
+                )
+
+            parsed = parse_ipv4_tcp(frame)
+
+            if isinstance(parsed, str):
+                continue
+
+            key, src, _dst = flow_identity(parsed)
+            info = selected.get(key)
+
+            if (
+                info is None
+                or record_index < info["syn_record_index"]
+                or record_index > info["last_record_index"]
+            ):
+                continue
+
+            stats = per_flow[key]
+
+            if stats["stopped"]:
+                continue
+
+            last_ts = stats["last_ts_us"]
+            packet_ts_us = ts_us
+
+            if (
+                last_ts is not None
+                and packet_ts_us >= last_ts
+                and packet_ts_us - last_ts > args.idle_timeout_us
+            ):
+                stats["idle_timeout_boundary"] = True
+                stats["stopped"] = True
+                continue
+
+            if last_ts is not None and packet_ts_us < last_ts:
+                stats["time_regressions"] += 1
+
+                if not args.normalize_timestamps:
+                    raise RuntimeError(
+                        f"Timestamp regression in slot {info['slot']}. "
+                        "Rerun with --normalize-timestamps."
+                    )
+
+                packet_ts_us = last_ts + 1
+                normalized_regressions += 1
+
+            rel_us = packet_ts_us - capture_min_ts
+
+            if rel_us < 0 or rel_us >= (1 << 48):
+                raise RuntimeError("Timestamp outside CrossState u48 range.")
+
+            if packet_id >= (1 << 32):
+                raise RuntimeError("Packet identifier exceeds 32-bit field.")
+
+            is_forward = src == tuple(info["initiator"])
+            direction_flag = 0x01 if is_forward else 0x00
+
+            shim = (
+                int(rel_us).to_bytes(6, "big")
+                + int(packet_id).to_bytes(4, "big")
+                + bytes([direction_flag])
+                + b"\x08\x00"
+            )
+
+            frame_out = (
+                PLACEHOLDER_DST
+                + PLACEHOLDER_SRC
+                + struct.pack("!H", ETH_P_CROSSSTATE)
+                + shim
+                + parsed["ip_packet"]
+            )
+
+            write_pcap_packet(out, packet_ts_us, frame_out)
+            packet_id += 1
+
+            stats["packets"] += 1
+            stats["forward_packets" if is_forward else "reverse_packets"] += 1
+            stats["ip_bytes"] += parsed["ip_len"]
+
+            flags = parsed["flags"]
+            stats["syn"] += bool(flags & TCP_SYN)
+            stats["synack"] += bool(
+                (flags & (TCP_SYN | TCP_ACK)) == (TCP_SYN | TCP_ACK)
+            )
+            stats["ack"] += bool(flags & TCP_ACK)
+            stats["fin"] += bool(flags & TCP_FIN)
+            stats["rst"] += bool(flags & TCP_RST)
+            stats["last_ts_us"] = packet_ts_us
+
+            if flags & (TCP_FIN | TCP_RST):
+                stats["closed"] = True
+                stats["stopped"] = True
+
+            elif stats["packets"] >= args.max_packets_per_flow:
+                stats["packet_cap_reached"] = True
+                stats["stopped"] = True
+
+            selected_packet_count += 1
+            selected_ip_bytes += parsed["ip_len"]
+
+            if selected_packet_count % 100000 == 0:
+                print(
+                    f"Replay packets written: {selected_packet_count:,}",
+                    flush=True,
+                )
+
+    empty_flows = [
+        info["slot"]
+        for key, info in selected.items()
+        if per_flow[key]["packets"] == 0
+    ]
+
+    if empty_flows:
+        raise RuntimeError(
+            f"Selected sessions produced no replay packets: {empty_flows[:10]}"
+        )
+
+    # ---------------------------------------------------------
+    # Manifest CSV
+    # ---------------------------------------------------------
+    manifest_path = outdir / "mawi_selected_flow_manifest.csv"
+
+    fields = [
+        "index", "slot", "key", "initiator_ip", "initiator_port",
+        "responder_ip", "responder_port", "syn_timestamp_us",
+        "syn_capture_record_index", "source_timestamp_regressions",
+        "packets", "forward_packets", "reverse_packets", "ip_bytes",
+        "syn_packets", "synack_packets", "ack_packets", "fin_packets",
+        "rst_packets", "terminal_seen", "idle_timeout_boundary",
+        "packet_cap_reached", "timestamp_regressions",
+        "expected_final_state",
+    ]
+
+    import ipaddress
+
+    with manifest_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        writer.writeheader()
+
+        for index, (key, info) in enumerate(selected.items(), start=1):
+            st = per_flow[key]
+
+            init_ip = str(
+                ipaddress.IPv4Address(info["initiator"][0])
+            )
+            resp_ip = str(
+                ipaddress.IPv4Address(info["responder"][0])
+            )
+
+            if st["closed"]:
+                expected_state = "CLOSED"
+            elif st["idle_timeout_boundary"]:
+                expected_state = "EST_AT_LAST_OBSERVED_PACKET"
+            elif st["packet_cap_reached"]:
+                expected_state = "EST_AT_PACKET_CAP"
+            else:
+                expected_state = "EST"
+
+            writer.writerow({
+                "index": index,
+                "slot": info["slot"],
+                "key": json.dumps(info["key"]),
+                "initiator_ip": init_ip,
+                "initiator_port": info["initiator"][1],
+                "responder_ip": resp_ip,
+                "responder_port": info["responder"][1],
+                "syn_timestamp_us": info["syn_ts_us"],
+                "syn_capture_record_index": info["syn_record_index"],
+                "source_timestamp_regressions": (
+                    info["source_timestamp_regressions"]
+                ),
+                "packets": st["packets"],
+                "forward_packets": st["forward_packets"],
+                "reverse_packets": st["reverse_packets"],
+                "ip_bytes": st["ip_bytes"],
+                "syn_packets": st["syn"],
+                "synack_packets": st["synack"],
+                "ack_packets": st["ack"],
+                "fin_packets": st["fin"],
+                "rst_packets": st["rst"],
+                "terminal_seen": st["closed"],
+                "idle_timeout_boundary": st["idle_timeout_boundary"],
+                "packet_cap_reached": st["packet_cap_reached"],
+                "timestamp_regressions": st["time_regressions"],
+                "expected_final_state": expected_state,
+            })
+
+    summary = {
+        "dataset": "MAWI Samplepoint-F 2024-08-06 14:00 JST",
+        "source_file": str(source),
+        "source_size_bytes": source.stat().st_size,
+        "capture_frames_scanned": capture_packets,
+        "ipv4_tcp_packets": int(global_stats["ipv4_tcp_packets"]),
+        "ipv4_tcp_ip_bytes": int(global_stats["ipv4_tcp_bytes"]),
+        "tcp_flag_packet_counts": {
+            k: int(v) for k, v in tcp_flags.items()
+        },
+        "global_timestamp_regressions": timestamp_regressions,
+        "capture_start_timestamp_us": int(capture_min_ts),
+        "capture_duration_seconds": round(
+            (capture_max_ts - capture_min_ts) / 1_000_000, 6
+        ),
+        "frame_classification_counts": {
+            k: int(v) for k, v in global_stats.items()
+        },
+        "idle_timeout_us": args.idle_timeout_us,
+        "max_packets_per_flow": args.max_packets_per_flow,
+        "selected_complete_bidirectional_handshakes": len(selected),
+        "candidate_flows_started_tracking": candidate_flows_seen,
+        "pending_candidates_evicted": pending_evictions,
+        "slot_rejections_against_existing_or_selected": slot_rejections,
+        "occupied_snapshot_used": (
+            str(occupied_path) if occupied_path else None
+        ),
+        "occupied_slots_excluded": len(occupied),
+        "selected_unique_slots": len(selected_slots) - len(occupied),
+        "last_selected_capture_record": max_selected_record_index,
+        "selected_source_timestamp_regressions": sum(
+            int(info["source_timestamp_regressions"])
+            for info in selected.values()
+        ),
+        "replay_packet_count": selected_packet_count,
+        "replay_ip_bytes": selected_ip_bytes,
+        "timestamp_regressions_normalized": normalized_regressions,
+        "replay_pcap": str(replay_path),
+        "manifest_csv": str(manifest_path),
+        "shim": {
+            "ether_type": "0x88B5",
+            "timestamp_bytes": 6,
+            "packet_id_bytes": 4,
+            "direction_flag_byte": 1,
+            "inner_ethertype": "0x0800",
+            "direction_1_means": "captured TCP initiator to responder",
+            "direction_0_means": "captured TCP responder to initiator",
+            "placeholder_macs": True,
+        },
+        "preparation_only": True,
+        "live_datapath_injection_performed": False,
+        "important_limitation": (
+            "This preparation selects complete observed IPv4/TCP handshakes. "
+            "It does not establish an enterprise inside/outside trust boundary. "
+            "The live replay adapter must map initiator/responder to the "
+            "CrossState inside/outside bit and replace placeholder MACs. "
+            "Sessions are truncated at their first FIN/RST."
+        ),
+        "output_directory": str(outdir),
+    }
+
+    summary_path = outdir / "mawi_dataset_summary.json"
+    summary_path.write_text(json.dumps(summary, indent=2) + "\n")
+
+    print("\n========== MAWI PREPARATION COMPLETE ==========")
+    print(f"Frames scanned: {capture_packets:,}")
+    print(f"IPv4/TCP packets: {global_stats['ipv4_tcp_packets']:,}")
+    print(f"Complete bidirectional sessions: {len(selected):,}")
+    print(f"Replay packets written: {selected_packet_count:,}")
+    print(
+        f"Replay PCAP: {replay_path} "
+        f"({replay_path.stat().st_size:,} bytes)"
+    )
+    print(f"Manifest: {manifest_path}")
+    print(f"Summary: {summary_path}")
+    print("No packets were sent to BMv2 or XDP.")
+    print("No firewall state was modified.")
+
+    return outdir
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=Path(
+            "/mnt/e/SDN/datasets/mawi/202408061400.pcap.gz"
+        ),
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("/mnt/e/SDN/datasets/mawi/processed"),
+    )
+    parser.add_argument("--max-flows", type=int, default=1000)
+    parser.add_argument("--max-pending", type=int, default=250000)
+    parser.add_argument(
+        "--idle-timeout-us",
+        type=int,
+        default=30_000_000,
+    )
+    parser.add_argument(
+        "--max-packets-per-flow",
+        type=int,
+        default=1000,
+    )
+    parser.add_argument(
+        "--occupied-snapshot",
+        type=Path,
+        default=None,
+        help="Optional CrossState snapshot whose slots must be avoided.",
+    )
+    parser.add_argument(
+        "--scale-root",
+        type=Path,
+        default=Path("/mnt/e/SDN/scale_1000"),
+        help="Auto-detect the latest G7 final snapshot here.",
+    )
+    parser.add_argument(
+        "--normalize-timestamps",
+        action="store_true",
+        help="Normalize per-flow timestamp regressions to last+1 microsecond.",
+    )
+
+    args = parser.parse_args()
+
+    if args.max_flows < 1:
+        parser.error("--max-flows must be positive")
+    if args.max_pending < 1000:
+        parser.error("--max-pending must be at least 1000")
+    if args.idle_timeout_us <= 0:
+        parser.error("--idle-timeout-us must be positive")
+    if args.max_packets_per_flow < 3:
+        parser.error("--max-packets-per-flow must be at least 3")
+
+    inspect_and_prepare(args)
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        print(
+            "\nInterrupted. Source PCAP and previous outputs are preserved.",
+            file=sys.stderr,
+        )
+        raise SystemExit(130)
+    except Exception as exc:
+        print(f"\nMAWI PIPELINE FAILED: {exc}", file=sys.stderr)
+        raise SystemExit(1)

@@ -1,0 +1,1 @@
+{"migrated": {"A_INITIAL_SYN": [186, 0], "A_REMAINDER_AFTER_MIGRATION": [2123, 0], "B_INITIAL_SYN": [186, 0], "B_REMAINDER_AFTER_MIGRATION": [2503, 0]}, "cold": {"A_INITIAL_SYN": [186, 0], "A_REMAINDER_AFTER_MIGRATION": [0, 2123], "B_INITIAL_SYN": [186, 0], "B_REMAINDER_AFTER_MIGRATION": [0, 2503]}, "flows_disrupted_cold": 372, "flows_disrupted_mig": 0}

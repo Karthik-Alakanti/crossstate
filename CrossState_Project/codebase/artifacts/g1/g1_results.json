@@ -1,0 +1,312 @@
+{
+  "collision_key": [
+    577056857,
+    37303,
+    3639700191,
+    52577,
+    6
+  ],
+  "collision_slot": 30468,
+  "results": [
+    {
+      "trace": "T1_NEW",
+      "event": 1,
+      "slot": 30468,
+      "oracle_verdict": "ALLOW",
+      "bmv2_verdict": "ALLOW",
+      "returned_flags": 5,
+      "verdict_match": true
+    },
+    {
+      "trace": "T1_NEW",
+      "event": "FINAL_STATE",
+      "slot": 30468,
+      "oracle_record": {
+        "key": [
+          577090037,
+          37303,
+          3639700191,
+          52577,
+          6
+        ],
+        "st": 1,
+        "last": 1000000,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "bmv2_record": {
+        "key": [
+          577090037,
+          37303,
+          3639700191,
+          52577,
+          6
+        ],
+        "st": 1,
+        "last": 1000000,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "trace_pass": true
+    },
+    {
+      "trace": "T2_ESTABLISH",
+      "event": 1,
+      "slot": 6121,
+      "oracle_verdict": "ALLOW",
+      "bmv2_verdict": "ALLOW",
+      "returned_flags": 5,
+      "verdict_match": true
+    },
+    {
+      "trace": "T2_ESTABLISH",
+      "event": 2,
+      "slot": 6121,
+      "oracle_verdict": "ALLOW",
+      "bmv2_verdict": "ALLOW",
+      "returned_flags": 5,
+      "verdict_match": true
+    },
+    {
+      "trace": "T2_ESTABLISH",
+      "event": 3,
+      "slot": 6121,
+      "oracle_verdict": "ALLOW",
+      "bmv2_verdict": "ALLOW",
+      "returned_flags": 4,
+      "verdict_match": true
+    },
+    {
+      "trace": "T2_ESTABLISH",
+      "event": "FINAL_STATE",
+      "slot": 6121,
+      "oracle_record": {
+        "key": [
+          167772161,
+          40000,
+          167772162,
+          443,
+          6
+        ],
+        "st": 2,
+        "last": 1000002,
+        "pkts": 3,
+        "bytes": 120
+      },
+      "bmv2_record": {
+        "key": [
+          167772161,
+          40000,
+          167772162,
+          443,
+          6
+        ],
+        "st": 2,
+        "last": 1000002,
+        "pkts": 3,
+        "bytes": 120
+      },
+      "record_match": true,
+      "trace_pass": true
+    },
+    {
+      "trace": "T3_CLOSED_REOPEN",
+      "event": 1,
+      "slot": 30939,
+      "oracle_verdict": "ALLOW",
+      "bmv2_verdict": "ALLOW",
+      "returned_flags": 5,
+      "verdict_match": true
+    },
+    {
+      "trace": "T3_CLOSED_REOPEN",
+      "event": 2,
+      "slot": 30939,
+      "oracle_verdict": "ALLOW",
+      "bmv2_verdict": "ALLOW",
+      "returned_flags": 4,
+      "verdict_match": true
+    },
+    {
+      "trace": "T3_CLOSED_REOPEN",
+      "event": 3,
+      "slot": 30939,
+      "oracle_verdict": "ALLOW",
+      "bmv2_verdict": "ALLOW",
+      "returned_flags": 5,
+      "verdict_match": true
+    },
+    {
+      "trace": "T3_CLOSED_REOPEN",
+      "event": 4,
+      "slot": 30939,
+      "oracle_verdict": "ALLOW",
+      "bmv2_verdict": "ALLOW",
+      "returned_flags": 5,
+      "verdict_match": true
+    },
+    {
+      "trace": "T3_CLOSED_REOPEN",
+      "event": 5,
+      "slot": 30939,
+      "oracle_verdict": "DROP",
+      "bmv2_verdict": "DROP",
+      "returned_flags": 1,
+      "verdict_match": true
+    },
+    {
+      "trace": "T3_CLOSED_REOPEN",
+      "event": 6,
+      "slot": 30939,
+      "oracle_verdict": "ALLOW",
+      "bmv2_verdict": "ALLOW",
+      "returned_flags": 5,
+      "verdict_match": true
+    },
+    {
+      "trace": "T3_CLOSED_REOPEN",
+      "event": "FINAL_STATE",
+      "slot": 30939,
+      "oracle_record": {
+        "key": [
+          167772171,
+          41000,
+          167772172,
+          443,
+          6
+        ],
+        "st": 1,
+        "last": 1000005,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "bmv2_record": {
+        "key": [
+          167772171,
+          41000,
+          167772172,
+          443,
+          6
+        ],
+        "st": 1,
+        "last": 1000005,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "trace_pass": true
+    },
+    {
+      "trace": "T4_LAZY_EXPIRY",
+      "event": 1,
+      "slot": 26559,
+      "oracle_verdict": "ALLOW",
+      "bmv2_verdict": "ALLOW",
+      "returned_flags": 5,
+      "verdict_match": true
+    },
+    {
+      "trace": "T4_LAZY_EXPIRY",
+      "event": 2,
+      "slot": 26559,
+      "oracle_verdict": "DROP",
+      "bmv2_verdict": "DROP",
+      "returned_flags": 0,
+      "verdict_match": true
+    },
+    {
+      "trace": "T4_LAZY_EXPIRY",
+      "event": 3,
+      "slot": 26559,
+      "oracle_verdict": "ALLOW",
+      "bmv2_verdict": "ALLOW",
+      "returned_flags": 5,
+      "verdict_match": true
+    },
+    {
+      "trace": "T4_LAZY_EXPIRY",
+      "event": "FINAL_STATE",
+      "slot": 26559,
+      "oracle_record": {
+        "key": [
+          167772181,
+          42000,
+          167772182,
+          443,
+          6
+        ],
+        "st": 1,
+        "last": 31000002,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "bmv2_record": {
+        "key": [
+          167772181,
+          42000,
+          167772182,
+          443,
+          6
+        ],
+        "st": 1,
+        "last": 31000002,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "trace_pass": true
+    },
+    {
+      "trace": "T5_COLLISION",
+      "event": 1,
+      "slot": 30468,
+      "oracle_verdict": "ALLOW",
+      "bmv2_verdict": "ALLOW",
+      "returned_flags": 5,
+      "verdict_match": true
+    },
+    {
+      "trace": "T5_COLLISION",
+      "event": 2,
+      "slot": 30468,
+      "oracle_verdict": "DROP",
+      "bmv2_verdict": "DROP",
+      "returned_flags": 1,
+      "verdict_match": true
+    },
+    {
+      "trace": "T5_COLLISION",
+      "event": "FINAL_STATE",
+      "slot": 30468,
+      "oracle_record": {
+        "key": [
+          577090037,
+          37303,
+          3639700191,
+          52577,
+          6
+        ],
+        "st": 1,
+        "last": 1000000,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "bmv2_record": {
+        "key": [
+          577090037,
+          37303,
+          3639700191,
+          52577,
+          6
+        ],
+        "st": 1,
+        "last": 1000000,
+        "pkts": 1,
+        "bytes": 40
+      },
+      "record_match": true,
+      "trace_pass": true
+    }
+  ]
+}

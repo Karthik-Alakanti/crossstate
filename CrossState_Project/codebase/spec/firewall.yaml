@@ -1,0 +1,48 @@
+name: tcp_firewall
+version: 1
+
+slots: 65536
+buckets: 64
+
+hash: crc32_13B_be
+clock: shim_us
+
+idle_timeout_us: 30000000
+
+collision: reject
+expiry: lazy
+
+key:
+  - ip_a
+  - port_a
+  - ip_b
+  - port_b
+  - proto
+
+value:
+  st:
+    enum:
+      - NEW
+      - EST
+      - CLOSED
+  last: u48
+  pkts: u64
+  bytes: u64
+
+semantics:
+  flow_key:
+    canonicalization: sort_endpoints_by_ip_then_port
+    encoding: network_byte_order
+
+  state_codes:
+    NEW: 1
+    EST: 2
+    CLOSED: 3
+
+  timeout:
+    unit: us
+    boundary: inclusive
+    expired_flow_behavior: allow_and_replace_on_inside_syn_without_ack_else_drop
+
+  counters:
+    overflow: wrap_modulo_2_pow_64

@@ -1,0 +1,35 @@
+========== RANDOMIZED XDP DIFFERENTIAL TEST ==========
+Packets: 100000, flows: 64, seed: 20261015
+Timestamp gaps include occasional jumps beyond the idle timeout.
+Sent 5000/100000
+Sent 10000/100000
+Sent 15000/100000
+Sent 20000/100000
+Sent 25000/100000
+Sent 30000/100000
+Sent 35000/100000
+Sent 40000/100000
+Sent 45000/100000
+Sent 50000/100000
+Sent 55000/100000
+Sent 60000/100000
+Sent 65000/100000
+Sent 70000/100000
+Sent 75000/100000
+Sent 80000/100000
+Sent 85000/100000
+Sent 90000/100000
+Sent 95000/100000
+Sent 100000/100000
+
+========== SUMMARY ==========
+Packets sent:              100000
+Packets observed:           100000
+Missing packet IDs:         0
+Duplicate packet IDs:       0
+Decision/flag mismatches:   0
+Touched slots checked:      64
+Final state mismatches:     0
+Elapsed seconds:            72.88
+
+G2_RANDOM_DIFFERENTIAL = PASS

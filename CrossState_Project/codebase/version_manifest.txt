@@ -1,0 +1,66 @@
+=== OS ===
+Ubuntu 26.04.1 LTS
+
+=== KERNEL ===
+6.18.40.1-microsoft-standard-WSL2
+
+=== COMPILERS ===
+gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+Ubuntu clang version 21.1.8 (6ubuntu1)
+
+=== BUILD TOOLS ===
+cmake version 4.2.3
+GNU Make 4.4.1
+1.13.2
+
+=== PROTOBUF / GRPC ===
+libprotoc 3.21.12
+grpc_cpp_plugin: Unknown option: --version
+
+=== THRIFT ===
+Thrift version 0.22.0
+
+===== CROSSSTATE TOOLCHAIN =====
+
+--- OS ---
+Ubuntu 26.04.1 LTS
+
+--- KERNEL ---
+6.18.40.1-microsoft-standard-WSL2
+
+--- LLVM/CLANG ---
+Ubuntu clang version 21.1.8 (6ubuntu1)
+
+--- PYTHON ---
+Python 3.14.4
+
+--- PI/BMv2 ---
+	libpixman-1.so.0 (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/libpixman-1.so.0
+	libpip4info.so.0 (libc6,x86-64) => /usr/local/lib/libpip4info.so.0
+	libpip4info.so (libc6,x86-64) => /usr/local/lib/libpip4info.so
+	libpiprotogrpc.so.0 (libc6,x86-64) => /usr/local/lib/libpiprotogrpc.so.0
+	libpiprotogrpc.so (libc6,x86-64) => /usr/local/lib/libpiprotogrpc.so
+	libpiprotobuf.so.0 (libc6,x86-64) => /usr/local/lib/libpiprotobuf.so.0
+	libpiprotobuf.so (libc6,x86-64) => /usr/local/lib/libpiprotobuf.so
+	libpipeline.so.1 (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/libpipeline.so.1
+	libpigrpcserver.so.0 (libc6,x86-64) => /usr/local/lib/libpigrpcserver.so.0
+	libpigrpcserver.so (libc6,x86-64) => /usr/local/lib/libpigrpcserver.so
+	libpifeproto.so.0 (libc6,x86-64) => /usr/local/lib/libpifeproto.so.0
+	libpifeproto.so (libc6,x86-64) => /usr/local/lib/libpifeproto.so
+	libpifegeneric.so.0 (libc6,x86-64) => /usr/local/lib/libpifegeneric.so.0
+	libpifegeneric.so (libc6,x86-64) => /usr/local/lib/libpifegeneric.so
+	libpifecpp.so.0 (libc6,x86-64) => /usr/local/lib/libpifecpp.so.0
+	libpifecpp.so (libc6,x86-64) => /usr/local/lib/libpifecpp.so
+	libpiconvertproto.so.0 (libc6,x86-64) => /usr/local/lib/libpiconvertproto.so.0
+	libpiconvertproto.so (libc6,x86-64) => /usr/local/lib/libpiconvertproto.so
+	libpiall.so.0 (libc6,x86-64) => /usr/local/lib/libpiall.so.0
+	libpiall.so (libc6,x86-64) => /usr/local/lib/libpiall.so
+	libpi_dummy.so.0 (libc6,x86-64) => /usr/local/lib/libpi_dummy.so.0
+	libpi_dummy.so (libc6,x86-64) => /usr/local/lib/libpi_dummy.so
+	libpi.so.0 (libc6,x86-64) => /usr/local/lib/libpi.so.0
+	libpi.so (libc6,x86-64) => /usr/local/lib/libpi.so
+simple_switch_grpc: OK
+
+--- P4C ---
+p4c 1.2.5.17 (SHA: 3bc092a211 BUILD: Release)

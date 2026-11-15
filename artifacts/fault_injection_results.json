@@ -1,0 +1,71 @@
+{
+  "experiment": "CrossState fault injection (RQ5)",
+  "created_utc": "2026-11-15T14:02:13.702275+00:00",
+  "targets": [
+    "bmv2",
+    "xdp"
+  ],
+  "results": [
+    {
+      "fault": "slot_collision",
+      "target": "bmv2",
+      "detected": true,
+      "gate_state": "CLOSED",
+      "rollback_result": "no_writes_performed",
+      "details": "conflict_errors=1, plans=['blocked_slot_conflict']"
+    },
+    {
+      "fault": "corrupt_record",
+      "target": "bmv2",
+      "detected": true,
+      "gate_state": "CLOSED",
+      "rollback_result": "rollback_attempted",
+      "details": "replace_plans=1, errors=0"
+    },
+    {
+      "fault": "interrupt_after_n",
+      "target": "bmv2",
+      "detected": true,
+      "gate_state": "CLOSED",
+      "rollback_result": "rollback_attempted",
+      "details": "writes_before_interrupt=2, completed=False"
+    },
+    {
+      "fault": "slot_collision",
+      "target": "xdp",
+      "detected": true,
+      "gate_state": "CLOSED",
+      "rollback_result": "no_writes_performed",
+      "details": "conflict_errors=1, plans=['blocked_slot_conflict']"
+    },
+    {
+      "fault": "corrupt_record",
+      "target": "xdp",
+      "detected": true,
+      "gate_state": "CLOSED",
+      "rollback_result": "rollback_attempted",
+      "details": "replace_plans=1, errors=0"
+    },
+    {
+      "fault": "interrupt_after_n",
+      "target": "xdp",
+      "detected": true,
+      "gate_state": "CLOSED",
+      "rollback_result": "rollback_attempted",
+      "details": "writes_before_interrupt=1, completed=False"
+    },
+    {
+      "fault": "source_mutation",
+      "target": "both",
+      "detected": true,
+      "gate_state": "CLOSED",
+      "rollback_result": "stability_check_fails_destination_unready",
+      "details": "equivalent=False"
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "detected": 7,
+    "gate_closed": 7
+  }
+}

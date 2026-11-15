@@ -1,0 +1,5 @@
+checkpoint,direction,source,destination,records_before,records_changed,records_after,copy_seconds_in_memory,status
+1,BMv2 -> XDP,BMv2-sim,XDP-sim,0,10,10,1.2989985407330096e-06,PASS
+2,XDP -> BMv2,XDP-sim,BMv2-sim,10,10,10,9.10000380827114e-07,PASS
+3,XDP -> BMv2,XDP-sim,BMv2-sim,10,10,20,5.279980541672558e-07,PASS
+4,BMv2 -> XDP,BMv2-sim,XDP-sim,20,10,20,6.429982022382319e-07,PASS
