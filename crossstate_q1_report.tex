@@ -31,9 +31,9 @@ Email: karthik@crossstate.org}}
 \begin{abstract}
 Stateful network functions (NFs), such as firewalls and load balancers, maintain per-flow connection-tracking state that must be preserved during migration between heterogeneous dataplanes. Existing state migration systems primarily address fault tolerance, consistent updates, or load balancing within a single implementation platform, but do not provide verified, schema-level migration across P4 programmable switches and eBPF/XDP SmartNICs with quantitative guarantees on decision agreement and state equivalence.
 
-This paper presents CrossState, a target-neutral state migration framework that migrates TCP firewall state between P4/BMv2 and eBPF/XDP dataplanes using a fail-closed checkpoint protocol with read-back verification, rollback, and a complete audit trail. CrossState contributes six methodological advances: (i) a target-neutral state schema with formal logical equivalence verified by construction via a deterministic policy step $\delta(S,e)\rightarrow(S',d)$; (ii) dirty-page differential migration that writes only changed records; (iii) atomic two-phase commit (prepare/commit/rollback) for cross-dataplane state transfer; (iv) hardware-native bucketed chaining with overflow probability analysis; (v) adaptive checkpoint scheduling using sliding-window traffic analysis; and (vi) flow-aware adaptive cutover scheduled during traffic lulls.
+This paper presents CrossState, a target-neutral state migration framework that migrates TCP firewall state between P4/BMv2 and eBPF/XDP dataplanes using a fail-closed checkpoint protocol with read-back verification, rollback, and a complete audit trail. CrossState contributes six methodological advances: (i) a target-neutral state schema with formal logical equivalence verified at runtime via audit via a deterministic policy step $\delta(S,e)\rightarrow(S',d)$; (ii) dirty-page differential migration that writes only changed records; (iii) atomic two-phase commit (prepare/commit/rollback) for cross-dataplane state transfer; (iv) hardware-native bucketed chaining with overflow probability analysis; (v) adaptive checkpoint scheduling using sliding-window traffic analysis; and (vi) flow-aware adaptive cutover scheduled during traffic lulls.
 
-Experimental results on 18{,}944 real MAWI trace packets across 1{,}000 flows demonstrate 100\% packet decision agreement, 100\% final state equivalence, and 100\% fault detection coverage across seven injected fault scenarios. A no-migration baseline disrupts 996 of 1{,}000 flows (99.6\%), whereas migration disrupts zero flows. The fail-closed gate minimizes traffic interruption to a 100\,ms stop-and-copy window. Hardware targets (P4/Tofino, eBPF/SmartNIC) are supported through a hardware abstraction layer; hardware validation is pending physical hardware availability.
+Experimental results on 18{,}944 real MAWI trace packets across 1{,}000 flows demonstrate 100\% packet decision agreement, 100\% final state equivalence across 86 records, and 100\% fault detection coverage across seven injected fault scenarios. A no-migration baseline disrupts 996 of 1{,}000 flows (99.6\%), whereas migration disrupts zero flows. The fail-closed gate minimizes traffic interruption to a measured stop-and-copy window of 3.65\,s per checkpoint. Hardware targets (P4/Tofino, eBPF/SmartNIC) are supported through a hardware abstraction layer; hardware validation is pending physical hardware availability.
 \end{abstract}
 
 \begin{keywords}
@@ -47,7 +47,7 @@ Stateful network functions (NFs), such as firewalls, load balancers, and NATs, m
 
 Existing state migration systems address related but distinct problems. OpenNF provides coordinated, loss-free moves within software middleboxes~\cite{gember2014opennf}. Swing State enables in-band state transfer between P4 switches~\cite{luo2017swing}. RedPlane provides replicated state storage for fault tolerance on Tofino switches~\cite{kim2021redplane}. Cora/Vela accelerates stateful NF offloading on SmartNICs through compile-time performance modeling~\cite{xi2024cora}. SwitchNIC provides consistent shared state between switches and servers~\cite{lei2025switchnic}. None of these systems, however, provides verified schema-level state migration across P4 and eBPF/XDP with quantitative guarantees on decision agreement, state equivalence, and fault detection.
 
-The research gap is threefold. First, there is no formally defined equivalence criterion for cross-platform firewall state that can be verified by construction. Second, existing systems do not provide a fail-closed readiness mechanism that prevents traffic from being directed to an incompletely synchronized destination. Third, evaluation against real packet traces with quantitative decision-agreement metrics is largely absent from the literature. CrossState addresses these gaps by defining logical equivalence between source and destination state tables, implementing a quiesced checkpoint protocol with per-phase auditing, and validating against 18{,}944 packets from the MAWI Samplepoint-F trace.
+The research gap is threefold. First, there is no formally defined equivalence criterion for cross-platform firewall state that can be verified at runtime via audit. Second, existing systems do not provide a fail-closed readiness mechanism specific to cross-platform state migration between P4 and eBPF/XDP that prevents traffic from being directed to an incompletely synchronized destination. Third, evaluation against real packet traces with quantitative decision-agreement metrics is largely absent from the literature. CrossState addresses these gaps by defining logical equivalence between source and destination state tables, implementing a quiesced checkpoint protocol with per-phase auditing, and validating against 18{,}944 packets from the MAWI Samplepoint-F trace.
 
 The research questions guiding this work are:
 
@@ -59,7 +59,7 @@ The research questions guiding this work are:
     \item \textbf{RQ5 (Assurance):} Are faults detected during import, and does the fail-closed readiness gate prevent inconsistent state from becoming active?
 \end{enumerate}
 
-The principal contributions are: (i) a target-neutral state schema with formal logical equivalence verified by construction for software dataplanes (P4/BMv2 and eBPF/XDP); (ii) a fail-closed checkpoint protocol with read-back verification, rollback, and per-phase audit trails; (iii) an evaluation against real network trace data with quantitative decision-agreement and state-equivalence metrics; and (iv) bidirectional migration support between P4/BMv2 and eBPF/XDP dataplanes with six methodological advances: dirty-page differential migration, atomic two-phase commit, hardware-native bucketed chaining, adaptive checkpoint scheduling, flow-aware adaptive cutover, and a hardware abstraction layer for P4/Tofino and eBPF/SmartNIC targets (hardware validation pending physical hardware availability).
+The principal contributions are: (i) a target-neutral state schema with formal logical equivalence verified at runtime via audit for software dataplanes (P4/BMv2 and eBPF/XDP); (ii) a fail-closed checkpoint protocol with read-back verification, rollback, and per-phase audit trails; (iii) an evaluation against real network trace data with quantitative decision-agreement and state-equivalence metrics; and (iv) bidirectional migration support between P4/BMv2 and eBPF/XDP dataplanes with six methodological advances: dirty-page differential migration, atomic two-phase commit, hardware-native bucketed chaining (reference-model analysis), adaptive checkpoint scheduling, flow-aware adaptive cutover, and a hardware abstraction layer for P4/Tofino and eBPF/SmartNIC targets (hardware validation pending physical hardware availability).
 
 \section{Related Work}
 \label{sec:related_work}
@@ -74,7 +74,7 @@ Cora/Vela~\cite{xi2024cora} focuses on performance modeling for stateful NF offl
 
 SwitchNIC~\cite{lei2025switchnic} provides consistent shared state between switches and ARM SmartNICs with 6\,$\mu$s P99 latency and 5.2$\times$ energy efficiency, but its focus is on consistent shared state rather than verified migration with audit trails.
 
-CrossState differs from these systems in four respects: (i) it defines a target-neutral state schema with formal logical equivalence verified by construction for software dataplanes; (ii) it implements a fail-closed checkpoint protocol with read-back verification, rollback, and per-phase audit trails; (iii) it evaluates against a real MAWI trace with quantitative decision-agreement and state-equivalence metrics; and (iv) it supports bidirectional migration between P4/BMv2 and eBPF/XDP dataplanes with six methodological advances: dirty-page differential migration, atomic two-phase commit, hardware-native bucketed chaining, adaptive checkpoint scheduling, flow-aware adaptive cutover, and a hardware abstraction layer for P4/Tofino and eBPF/SmartNIC targets.
+CrossState differs from these systems in four respects: (i) it defines a target-neutral state schema with formal logical equivalence verified at runtime via audit for software dataplanes; (ii) it implements a fail-closed checkpoint protocol with read-back verification, rollback, and per-phase audit trails; (iii) it evaluates against a real MAWI trace with quantitative decision-agreement and state-equivalence metrics; and (iv) it supports bidirectional migration between P4/BMv2 and eBPF/XDP dataplanes with six methodological advances: dirty-page differential migration, atomic two-phase commit, hardware-native bucketed chaining (reference-model analysis), adaptive checkpoint scheduling, flow-aware adaptive cutover, and a hardware abstraction layer for P4/Tofino and eBPF/SmartNIC targets.
 
 \begin{figure}[htbp]
 \centering
@@ -225,7 +225,7 @@ Per-record write time is directly instrumented in both datapath importers using 
 
 \subsection{RQ1: Correctness}
 \label{subsec:rq1}
-All 18{,}944 MAWI packets produced decisions identical to the reference model (100\% agreement). The final BMv2 and XDP snapshots were logically equivalent across 1{,}086 records with zero mismatches and zero slot conflicts. This demonstrates that the deterministic policy step $\delta$, combined with the canonical key ordering and CRC32 slot mapping, produces identical decisions on both targets when tables are equivalent.
+All 18{,}944 MAWI packets produced decisions identical to the reference model (100\% agreement). The final BMv2 and XDP snapshots were logically equivalent across 86 records with zero mismatches and zero slot conflicts. This demonstrates that the deterministic policy step $\delta$, combined with the canonical key ordering and CRC32 slot mapping, produces identical decisions on both targets when tables are equivalent. Note that the datapath legitimately drops packets for flows with no existing state (e.g., packets arriving before their flow's initial SYN), so a `Drop` decision is not necessarily an error; the key result is that both targets make identical decisions for every packet.
 
 These results are derived from a single MAWI trace (Samplepoint-F, 2024-08-06 14:00 JST) with 1,000 flows. The 100\% decision agreement and state equivalence should be interpreted as evidence of correctness under these specific conditions, not as a guarantee of generalizability to other traces, traffic patterns, or flow counts.
 
@@ -252,18 +252,24 @@ These results are derived from a single MAWI trace (Samplepoint-F, 2024-08-06 14
 
 \subsection{RQ2: Necessity}
 \label{subsec:rq2}
-The no-migration baseline disrupts 996 of 1{,}000 flows (99.6\%) and drops 17{,}890 of 17{,}944 follow-up packets (99.7\%). With CrossState migration, zero packets are dropped and zero flows are disrupted. This confirms that migrated state is not redundant: without synchronized state, the destination target cannot correctly process follow-up packets for flows whose state was established on the source.
+The no-migration baseline disrupts 996 of 1{,}000 flows (99.6\%) and drops 17{,}890 of 17{,}944 follow-up packets (99.7\%). With CrossState migration, zero additional packets are dropped beyond those legitimately denied by the firewall policy (i.e., packets for flows with no existing state). This confirms that migrated state is not redundant: without synchronized state, the destination target cannot correctly process follow-up packets for flows whose state was established on the source.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.48\textwidth]{rq2_disruption_line}
-\caption{RQ2: Packet drop rate comparison --- migrated vs no-migration baseline across measurement points. Migration eliminates packet loss entirely.}
+\caption{RQ2: Packet drop rate comparison --- migrated vs no-migration baseline across measurement points. Migration eliminates migration-induced packet drops; follow-up packets for flows with no existing state are still dropped by the firewall policy.}
 \label{fig:rq2_disruption}
 \end{figure}
 
 \subsection{RQ3: Capacity}
 \label{subsec:rq3}
-The direct-mapped table rejects 0.85\% of flows at 1{,}000 insertions and 7.2\% at 10{,}000 insertions, capping practical capacity at $\sim$1{,}200 flows at 1\% rejection. Bucketed chaining (depth 4) is projected to reject $<0.1\%$ at 10{,}000 flows, scaling toward the full 63{,}295 MAWI candidate flows. The bucketed-chain extension is implemented in the reference model, snapshot format, and comparison logic; datapath-level changes require recompiling the P4 and XDP programs.
+The direct-mapped 65{,}536-slot table rejects a second flow hashing to an occupied slot. With bucketed chaining of depth $C=4$, up to four distinct keys may share a slot, forming a chain. The probability of chain overflow for bucket load $\lambda = n/N$ is:
+\begin{equation}
+    P(\text{overflow}) = 1 - \sum_{i=0}^{C} \frac{e^{-\lambda}\lambda^i}{i!}
+\label{eq:overflow}
+\end{equation}
+
+Bucketed chaining is implemented in the reference model, snapshot format, and comparison logic; datapath-level changes require recompiling the P4 and XDP programs. The current datapaths use direct-mapped tables ($C=1$), where each slot holds at most one record.
 
 \begin{figure}[htbp]
 \centering
@@ -274,7 +280,7 @@ The direct-mapped table rejects 0.85\% of flows at 1{,}000 insertions and 7.2\% 
 
 \subsection{RQ4: Cost}
 \label{subsec:rq4}
-Four checkpoints were executed over the MAWI migration. Total checkpoint time is 863.75\,s, with the BMv2 control path (one CLI subprocess per register write) dominating timing. Delta writes (changed records only) reduce the record count by approximately 40\% compared to full rewrite. Per-record write time is directly instrumented in both importers using time.perf\_counter() around each write+verify cycle; min, max, mean, and median are reported per run.
+Four checkpoints were executed over the MAWI migration. Total checkpoint time is 863.75\,s, with the BMv2 control path (one CLI subprocess per register write) dominating timing. Delta writes (changed records only) reduce the record count compared to full rewrite. Per-record write time is directly instrumented in both importers using time.perf\_counter() around each write+verify cycle; timing statistics are logged per run.
 
 \begin{table}[htbp]
 \centering
@@ -285,10 +291,10 @@ Four checkpoints were executed over the MAWI migration. Total checkpoint time is
 \toprule
 Checkpoint & Direction & Duration (s) & Records \\
 \midrule
-C1 & BMv2 $\rightarrow$ XDP & 47.66 & 10 \\
-C2 & XDP $\rightarrow$ BMv2 & 201.48 & 10 \\
-C3 & XDP $\rightarrow$ BMv2 & 484.09 & 10 \\
-C4 & BMv2 $\rightarrow$ XDP & 130.52 & 10 \\
+C1 & BMv2 $\rightarrow$ XDP & 47.66 & 86 \\
+C2 & XDP $\rightarrow$ BMv2 & 201.48 & 86 \\
+C3 & XDP $\rightarrow$ BMv2 & 484.09 & 86 \\
+C4 & BMv2 $\rightarrow$ XDP & 130.52 & 86 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -344,36 +350,36 @@ System & Year & Platform & Downtime & Decision Agreement & State Equivalence & C
 RedPlane & 2021 & Tofino & 950\,ms & n/a & n/a & No & Replication \\
 Cora/Vela & 2024 & SoC SmartNIC $\leftrightarrow$ host/Arm CPU & n/a & n/a & n/a & Yes & None \\
 SwitchNIC & 2025 & Tofino switch + ARM SmartNIC & n/a & n/a & n/a & Yes & None \\
-CrossState & 2026 & BMv2 (P4) $\leftrightarrow$ XDP (eBPF) & 100\,ms & 100\% & 100\% & Yes & Audit \\
+CrossState & 2026 & BMv2 (P4) $\leftrightarrow$ XDP (eBPF) & 3.65\,s & 100\% & 100\% & Yes & Audit \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-None of the compared systems report packet loss \%, decision agreement \%, or state equivalence \%, as these are CrossState-specific verification metrics. The `n/a` entries indicate metrics not reported in the source papers, not necessarily absent capabilities. Paper-specific measured values include: RedPlane recovery 0.9--1.0\,s, $<8\,\mu$s per-packet overhead, $<14\%$ ASIC resources; Cora/Vela CPU savings 62.9\%--91.9\%, throughput improvement 15.2\%--120.8\%; SwitchNIC P99 latency 6\,$\mu$s, fast-path $\sim$350\,ns, 5.2$\times$ energy efficiency.
+None of the compared systems report packet loss \%, decision agreement \%, or state equivalence \%, as these are CrossState-specific verification metrics. The `n/a` entries indicate metrics not reported in the source papers, not necessarily absent capabilities. Paper-specific measured values include: RedPlane recovery 0.9--1.0\,s, $<8\,\mu$s per-packet overhead, $<14\%$ ASIC resources; Cora/Vela CPU savings 62.9\%--91.9\%, throughput improvement 15.2\%--120.8\%; SwitchNIC P99 latency 6\,$\mu$s, fast-path $\sim$350\,ns, 5.2$\times$ energy efficiency. Metrics for Cora/Vela and SwitchNIC are taken from their respective publications and have not been independently verified by the authors.
 
 \section{Limitations and Future Research}
 \label{sec:limitations}
 CrossState has several limitations:
 
-\textbf{1. Quiesced checkpoints:} Checkpoints are quiesced rather than continuously replicated; traffic is paused during the 100\,ms stop-and-copy window. The adaptive checkpoint scheduler (Section~\ref{subsec:adaptive_sched}) mitigates this by scheduling checkpoints during low-traffic windows, but does not eliminate quiescence entirely.
+\textbf{1. Quiesced checkpoints:} Checkpoints are quiesced rather than continuously replicated; traffic is paused during the stop-and-copy window. The adaptive checkpoint scheduler (Section~\ref{subsec:adaptive_sched}) is implemented but was not evaluated on the live testbed; evaluation used fixed 4{,}736-packet intervals between checkpoints.
 
-\textbf{2. Manual cutover:} Cutover is manually steered rather than automatic failover (the failover watcher is implemented and validated against simulated datapath failures; live hardware validation remains pending). The flow-aware adaptive cutover (Section~\ref{subsec:adaptive_cutover}) schedules cutover during traffic lulls but still requires manual initiation.
+\textbf{2. Manual cutover:} Cutover is manually steered rather than automatic failover (the failover watcher is implemented and validated against simulated datapath failures; live hardware validation remains pending). The flow-aware adaptive cutover (Section~\ref{subsec:adaptive_cutover}) is implemented but not evaluated on the live testbed.
 
 \textbf{3. Non-atomic register reads:} BMv2 register reads are not atomic, creating torn-snapshot risk if the source changes during export. A sampled consistency check is performed during BMv2 export (re-reading a subset of slots and comparing to exported values) to detect torn reads; unsampled slots remain at risk during active traffic.
 
-\textbf{4. Software-only testbed:} No line-rate or hardware NIC performance claims are made, as experiments run on a WSL/vhost software testbed. Hardware targets (Tofino, SmartNIC) are defined in the abstraction layer but remain unavailable stubs pending physical hardware availability; all data-plane operations on hardware targets raise HardwareUnavailableError.
+\textbf{4. Software-only testbed:} No line-rate or hardware NIC performance claims are made, as experiments run on a WSL/vhost software testbed. Hardware targets (Tofino, SmartNIC) are defined in the abstraction layer but remain stubs pending physical hardware availability; all data-plane operations on hardware targets raise HardwareUnavailableError.
 
 \textbf{5. Direct-mapped table capacity:} The direct-mapped table caps at $\sim$1{,}200 flows at 1\% rejection; bucketed chains are implemented in the control plane but require datapath recompilation for hardware deployment.
 
 \textbf{6. Single dataset:} All results are derived from a single MAWI trace (Samplepoint-F, 2024-08-06 14:00 JST) with 1,000 flows. Generalization to other traces, traffic patterns, or time windows is unverified.
 
-\textbf{7. Per-record timing:} Per-record write time is directly instrumented in both datapath importers using time.perf\_counter() around each write+verify cycle; min, max, mean, and median are reported per run.
+\textbf{7. Per-record timing:} Per-record write time is directly instrumented in both datapath importers using time.perf\_counter() around each write+verify cycle; min, max, mean, and median are computed per run and logged.
 
 Future work includes: (i) implementing bucketed chains in the P4/XDP datapaths; (ii) enabling automatic failover without operator intervention and validating against live hardware failures; (iii) extending to continuous/live replication with dirty-page tracking; (iv) evaluating on hardware targets (Tofino, SmartNIC) through the HAL abstraction layer; and (v) evaluating on multiple MAWI traces and diverse traffic patterns.
 
 \section{Conclusion}
 \label{sec:conclusion}
-CrossState demonstrates that cross-platform stateful firewall migration between P4/BMv2 and eBPF/XDP can be verified by construction with exact equivalence, fail-closed readiness, and a complete audit trail. Over 18{,}944 real MAWI packets and 1{,}000 flows, CrossState achieved 100\% packet decision agreement, 100\% state equivalence across 1{,}086 records, and 100\% fault detection coverage across seven injected scenarios. The no-migration baseline disrupted 996 of 1{,}000 flows, confirming that migrated state is essential rather than redundant.
+CrossState demonstrates that cross-platform stateful firewall migration between P4/BMv2 and eBPF/XDP can be verified at runtime via read-back auditing with exact equivalence, fail-closed readiness, and a complete audit trail. Over 18{,}944 real MAWI packets and 1{,}000 flows, CrossState achieved 100\% packet decision agreement, 100\% state equivalence across 86 records, and 100\% fault detection coverage across seven injected scenarios. The no-migration baseline disrupted 996 of 1{,}000 flows, confirming that migrated state is essential rather than redundant.
 
 These results are derived from a single MAWI trace on a software testbed (BMv2/XDP). Hardware targets (Tofino, SmartNIC) remain unavailable stubs, and the automatic failover watcher is validated against simulated (not live hardware) failures. The bucketed-chain extension raises capacity beyond the direct-mapped limit in the reference model but requires datapath recompilation for hardware deployment. CrossState is positioned as a schema-level, audited migration system between P4 and eBPF with quantitative verification guarantees, subject to the limitations enumerated in Section~\ref{sec:limitations}.
 
